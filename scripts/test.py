@@ -39,7 +39,8 @@ if training_method == "DQN":
     if model_name == "GCN":
         model = Networks.GCN()
     elif model_name == "g-U-Net":
-        model = Networks.GraphUNet(in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
+        model = Networks.GraphUNet(
+            in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
         model = Networks.GGNN()
     model.load_state_dict(check_point_p)
@@ -51,7 +52,8 @@ elif training_method == "A2C":
     if model_name == "GCN":
         model = Networks.PolicyGCN()
     elif model_name == "g-U-Net":
-        model = Networks.PolicyGraphUNet(in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
+        model = Networks.PolicyGraphUNet(
+            in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
         model = Networks.PolicyGGNN()
     model.load_state_dict(check_point_p)
@@ -86,7 +88,8 @@ def generator(lo_name):
 
     if PLOT:
         f1 = plt.figure(1)
-        f1.set_size_inches((1 + (map_size - 40) / 40) * 6.4, (1 + (map_size - 40) / 40) * 4.8)
+        f1.set_size_inches((1 + (map_size - 40) / 40) * 6.4,
+                           (1 + (map_size - 40) / 40) * 4.8)
         # plot environment
         env.render(mode=mode)
 
@@ -111,7 +114,8 @@ def generator(lo_name):
             readout_t = test_q(s_t, 0, device, model).cpu().detach().numpy()
             action_index = np.argmax(readout_t[-fro_size:])
         elif training_method == "A2C":
-            readout_t = test_a2c(s_t, b_t, mask, device, model).view(-1).cpu().detach().numpy()
+            readout_t = test_a2c(s_t, b_t, mask, device,
+                                 model).view(-1).cpu().detach().numpy()
             action_index = np.argmax(readout_t)
         gcn_tt1 = time.time()
 
@@ -140,7 +144,8 @@ def generator(lo_name):
                 data_all = data_all.append(
                     {"Step": step_t, "Category": policy_name, "Map entropy": entro, "Landmarks error": l_error,
                      "Max localization uncertainty": max_traj_error}, ignore_index=True)
-            print('step: ', step_t, 'action: ', act, 'done: ', done, 'explored: ', env.status())
+            print('step: ', step_t, 'action: ', act,
+                  'done: ', done, 'explored: ', env.status())
 
             if done:
                 while step_t < plot_max_step:

@@ -447,6 +447,3 @@ class ValueGraphUNet(torch.nn.Module):
         return '{}({}, {}, {}, depth={}, pool_ratios={})'.format(
             self.__class__.__name__, self.in_channels, self.hidden_channels,
             self.out_channels, self.depth, self.pool_ratios)
-
-
-

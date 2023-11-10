@@ -1,3 +1,5 @@
+from time import time
+from functools import wraps
 import os
 import math
 import shutil
@@ -21,8 +23,6 @@ matplotlib.rcParams['legend.edgecolor'] = 'k'
 #######################################
 
 #######################################
-from functools import wraps
-from time import time
 
 
 def timeit(func):
@@ -45,6 +45,8 @@ def load_config(config_name):
     return config
 
 #######################################
+
+
 def plot_cov_ellipse(pos, cov, nstd=2, ax=None, **kwargs):
     def eigsorted(cov):
         vals, vecs = np.linalg.eigh(cov)
@@ -128,7 +130,7 @@ def plot_map(m, ax=None, trajectory=True, label=False, cov=True):
             y.append(pose.pose.y)
             if cov and pose.core_vehicle:
                 plot_cov_ellipse([pose.pose.x, pose.pose.y], pose.global_covariance[:2, :2], ec='none',
-                                  color='g', alpha=0.5)
+                                 color='g', alpha=0.5)
         ax.plot(x, y, 'g-')
 
     ax.set_xlabel('X (m)')
@@ -150,7 +152,8 @@ def plot_virtual_map(virtual_map, map_params, ax=None, virtual_landmarks=True, a
     if not virtual_landmarks:
         return
     for vl in virtual_map.iter_virtual_landmarks():
-        plot_info_ellipse((vl.point.x, vl.point.y), vl.information, 0.5, None, ec='gray', fill=None)
+        plot_info_ellipse((vl.point.x, vl.point.y),
+                          vl.information, 0.5, None, ec='gray', fill=None)
 
 
 def plot_virtual_map_cov(cov_array, max_sigma, map_params, ax=None, alpha=1.0):
@@ -163,8 +166,10 @@ def plot_virtual_map_cov(cov_array, max_sigma, map_params, ax=None, alpha=1.0):
                       map_params.min_y, map_params.max_y])
     x_res = (map_params.max_x - map_params.min_x) / cov_array[0].shape[1]
     y_res = (map_params.max_y - map_params.min_y) / cov_array[0].shape[0]
-    x = np.arange(0, cov_array[0].shape[1]) * x_res + map_params.min_x + 0.5 * x_res
-    y = np.arange(0, cov_array[0].shape[0]) * y_res + map_params.min_y + 0.5 * y_res
+    x = np.arange(0, cov_array[0].shape[1]) * \
+        x_res + map_params.min_x + 0.5 * x_res
+    y = np.arange(0, cov_array[0].shape[0]) * \
+        y_res + map_params.min_y + 0.5 * y_res
     XX, YY = np.meshgrid(x, y)
     ax.quiver(XX, YY, x_res * np.cos(cov_array[1]), x_res * np.sin(cov_array[1]),
               headwidth=0, headlength=0, pivot='mid', angles='xy', scale_units='xy', scale=1)
@@ -179,13 +184,16 @@ def plot_pose(pose, sensor_params=None, ax=None):
         min_bearing = ss2d.Rot2(sensor_params.min_bearing + pose.theta).theta
         max_bearing = ss2d.Rot2(sensor_params.max_bearing + pose.theta).theta
         ax.plot([pose.x, pose.x + sensor_params.max_range * math.cos(pose.theta)],
-                [pose.y, pose.y + sensor_params.max_range * math.sin(pose.theta)],
+                [pose.y, pose.y + sensor_params.max_range *
+                    math.sin(pose.theta)],
                 color='deepskyblue', alpha=0.3)
         ax.plot([pose.x, pose.x + sensor_params.max_range * math.cos(min_bearing)],
-                [pose.y, pose.y + sensor_params.max_range * math.sin(min_bearing)],
+                [pose.y, pose.y + sensor_params.max_range *
+                    math.sin(min_bearing)],
                 color='deepskyblue', alpha=0.3)
         ax.plot([pose.x, pose.x + sensor_params.max_range * math.cos(max_bearing)],
-                [pose.y, pose.y + sensor_params.max_range * math.sin(max_bearing)],
+                [pose.y, pose.y + sensor_params.max_range *
+                    math.sin(max_bearing)],
                 color='deepskyblue', alpha=0.3)
         fov = Wedge((pose.x, pose.y), sensor_params.max_range,
                     math.degrees(min_bearing), math.degrees(max_bearing),
@@ -234,7 +242,7 @@ def plot_path(planner, ax=None, dubins=False, cov=True, rrt=True):
 
                 if cov and edge.second.cost < 1e9:
                     plot_cov_ellipse([x[-1], y[-1]], edge.second.state.global_covariance[:2, :2], ec='none',
-                                      color='red', alpha=0.5)
+                                     color='red', alpha=0.5)
 
         for edge in planner.iter_solution():
             x = [p.x for p in edge.second.poses]
@@ -308,12 +316,15 @@ def get_landmarks_error(folder):
     os.chdir(folder)
     for step in range(1000, 0, -1):
         try:
-            landmarks = np.atleast_2d(np.loadtxt('landmarks{}.csv'.format(step)))
-            ground_truth_landmarks = np.atleast_2d(np.loadtxt('ground_truth_landmarks{}.csv'.format(step)))
+            landmarks = np.atleast_2d(
+                np.loadtxt('landmarks{}.csv'.format(step)))
+            ground_truth_landmarks = np.atleast_2d(
+                np.loadtxt('ground_truth_landmarks{}.csv'.format(step)))
         except IOError:
             continue
 
-        ground_truth_landmarks = {int(round(l[0])): l[1:3] for l in ground_truth_landmarks}
+        ground_truth_landmarks = {
+            int(round(l[0])): l[1:3] for l in ground_truth_landmarks}
         landmarks = {int(round(l[0])): l[1:3] for l in landmarks}
 
         error = 0.0
@@ -344,7 +355,8 @@ def get_trajectory_uncertainty(folder, trace, fixed_distances):
         distances.append(distance)
 
         trajectory = trajectory[trajectory[:, 0] == 1, :]
-        max_uncertainties = [measure_uncertainty(cov, trace) for cov in trajectory[:, 4:]]
+        max_uncertainties = [measure_uncertainty(
+            cov, trace) for cov in trajectory[:, 4:]]
         uncertainties.append(max(max_uncertainties))
 
     if len(distances) == 0:
@@ -378,7 +390,8 @@ def get_map_entropy(folder, fixed_distances):
                        for pose1, pose2 in zip(trajectory[:, 1:4], trajectory[1:, 1:4]))
         distances.append(distance)
 
-        entropy.append(measure_entropy(virtual_landmarks) / len(virtual_landmarks))
+        entropy.append(measure_entropy(virtual_landmarks) /
+                       len(virtual_landmarks))
 
     if len(distances) == 0:
         print('Empty', folder)
@@ -414,7 +427,7 @@ def get_landmarks_uncertainty(folder, trace, num_landmarks, uncertainty0, fixed_
         if landmarks.shape[1] == 0:
             uncertainties.append(num_landmarks * uncertainty0)
         else:
-            uncertainties.append(np.sum(measure_uncertainty(landmark[3:], trace) for landmark in landmarks) + \
+            uncertainties.append(np.sum(measure_uncertainty(landmark[3:], trace) for landmark in landmarks) +
                                  (num_landmarks - landmarks.shape[0]) * uncertainty0)
 
     if len(distances) == 0:
@@ -482,7 +495,7 @@ def get_folders():
 
     for dirpath, dirnames, filenames in os.walk('.'):
         folder_name = os.path.split(dirpath)[1]
-        if folder_name is not '.' and folder_name in status:
+        if folder_name != '.' and folder_name in status:
             folders.append(folder_name)
     return folders
 
@@ -521,5 +534,5 @@ def clean_folders():
 
     for dirpath, dirnames, filenames in os.walk('.'):
         folder_name = os.path.split(dirpath)[1]
-        if folder_name is not '.' and folder_name not in status:
+        if folder_name != '.' and folder_name not in status:
             shutil.rmtree(folder_name)

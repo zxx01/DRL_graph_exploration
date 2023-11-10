@@ -41,8 +41,10 @@ if training_method == "DQN":
         model = Networks.GCN()
         modelt = Networks.GCN()
     elif model_name == "g-U-Net":
-        model = Networks.GraphUNet(in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
-        modelt = Networks.GraphUNet(in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
+        model = Networks.GraphUNet(
+            in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
+        modelt = Networks.GraphUNet(
+            in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
         model = Networks.GGNN()
         modelt = Networks.GGNN()
@@ -68,8 +70,10 @@ elif training_method == "A2C":
         modela = Networks.PolicyGCN()
         modelc = Networks.ValueGCN()
     elif model_name == "g-U-Net":
-        modela = Networks.PolicyGraphUNet(in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
-        modelc = Networks.ValueGraphUNet(in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
+        modela = Networks.PolicyGraphUNet(
+            in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
+        modelc = Networks.ValueGraphUNet(
+            in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
         modela = Networks.PolicyGGNN()
         modelc = Networks.ValueGGNN()
@@ -82,7 +86,8 @@ elif training_method == "A2C":
 for i in range(int(epoch_nums)):
     cmd = "python3 run_training.py " + training_method + " " + model_name
     subprocess.call(cmd, shell=True)
-    temp_reward_data = np.loadtxt(object_path + "temp_reward.csv", delimiter=",")
+    temp_reward_data = np.loadtxt(
+        object_path + "temp_reward.csv", delimiter=",")
     temp_loss_data = np.loadtxt(object_path + "temp_loss.csv", delimiter=",")
     for j in range(np.shape(temp_reward_data)[0]):
         step_t = temp_reward_data[j][0]

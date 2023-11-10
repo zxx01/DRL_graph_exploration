@@ -76,7 +76,8 @@ class DeepQ(object):
             temp_i += 1
             # e-greedy scale down epsilon
             if self.epsilon > self.FINAL_EPSILON and self.step_t > self.OBSERVE:
-                self.epsilon -= (self.INITIAL_EPSILON - self.FINAL_EPSILON) / self.EXPLORE
+                self.epsilon -= (self.INITIAL_EPSILON -
+                                 self.FINAL_EPSILON) / self.EXPLORE
             # get the input data (X, A)
             adjacency, featrues, globals_features, fro_size = env.graph_matrix()
             node_size = adjacency.shape[0]
@@ -89,7 +90,8 @@ class DeepQ(object):
 
             # choose an action
             if method == "e-greedy":
-                readout_t = self.test(s_t, 0.0, device, policy_net).cpu().detach().numpy()
+                readout_t = self.test(
+                    s_t, 0.0, device, policy_net).cpu().detach().numpy()
                 a_t = np.zeros([node_size])
                 if random.random() <= self.epsilon:
                     # Random Action
@@ -152,7 +154,8 @@ class DeepQ(object):
                     s_j1_batch = batch1
 
                 r_batch = [d[2] for d in minibatch]
-                readout_j1_batch = self.test(s_j1_batch, 0.0, device, target_net)
+                readout_j1_batch = self.test(
+                    s_j1_batch, 0.0, device, target_net)
                 readout_j1_batch = readout_j1_batch.cpu().detach().numpy()
                 a_batch = np.array([])
                 y_batch = np.array([])
@@ -178,11 +181,13 @@ class DeepQ(object):
                     y_batch = np.append(y_batch, temp_y)
 
                 # perform gradient step
-                self.train(s_j_batch, a_batch, y_batch, device, policy_net, optimizer)
+                self.train(s_j_batch, a_batch, y_batch,
+                           device, policy_net, optimizer)
                 temp_loss_data.append([self.step_t, self.temp_loss])
 
             print("TIMESTEP", self.step_t, "/ STATE", state, "/ EPSILON", self.epsilon,
-                  "/ Q_MAX %e" % np.max(readout_t), "/ EXPLORED", env.status(), "/ REWARD", r_t,
+                  "/ Q_MAX %e" % np.max(
+                      readout_t), "/ EXPLORED", env.status(), "/ REWARD", r_t,
                   "/ Terminal", current_done, "\n")
 
             if done:
@@ -191,22 +196,29 @@ class DeepQ(object):
                 env = robot.ExplorationEnv(self.map_size, 0, Test)
                 done = False
 
-            data_all = data_all.append({"Step": self.step_t, "Reward": r_t}, ignore_index=True)
+            data_all = data_all.append(
+                {"Step": self.step_t, "Reward": r_t}, ignore_index=True)
             self.total_reward = np.append(self.total_reward, r_t)
 
             # save progress every 50000 iterations
             if self.step_t % 5e4 == 0:
-                torch.save(policy_net.state_dict(), self.weights_path + 'MyModel.pt')
+                torch.save(policy_net.state_dict(),
+                           self.weights_path + 'MyModel.pt')
             if self.step_t > 1000:
-                new_average_reward = np.average(self.total_reward[len(self.total_reward) - 1000:])
+                new_average_reward = np.average(
+                    self.total_reward[len(self.total_reward) - 1000:])
                 if self.step_t % 1e2 == 0:
                     temp_reward_data.append([self.step_t, new_average_reward])
 
-        np.savetxt(self.object_path + "temp_reward.csv", temp_reward_data, delimiter=",")
-        np.savetxt(self.object_path + "temp_loss.csv", temp_loss_data, delimiter=",")
+        np.savetxt(self.object_path + "temp_reward.csv",
+                   temp_reward_data, delimiter=",")
+        np.savetxt(self.object_path + "temp_loss.csv",
+                   temp_loss_data, delimiter=",")
         data_all.to_csv(self.reward_data_path + "reward_data.csv", index=False)
-        torch.save(policy_net.state_dict(), self.object_path + 'Model_Policy.pt')
-        torch.save(target_net.state_dict(), self.object_path + 'Model_Target.pt')
+        torch.save(policy_net.state_dict(),
+                   self.object_path + 'Model_Policy.pt')
+        torch.save(target_net.state_dict(),
+                   self.object_path + 'Model_Target.pt')
 
     def data_process(self, data):
         s_a, s_x = data
@@ -323,7 +335,8 @@ class A2C(object):
             rewards = env.rewards_all_goals(all_actions)
 
             # choose an action
-            readout_t = self.test(s_t, b_t, mask, device, policy_net).view(-1).cpu().detach().numpy()
+            readout_t = self.test(s_t, b_t, mask, device,
+                                  policy_net).view(-1).cpu().detach().numpy()
             val = self.test(s_t, b_t, mask, device, value_net).item()
 
             action_index = np.random.choice(fro_size, 1, p=readout_t)[0]
@@ -354,7 +367,8 @@ class A2C(object):
             last_value = self.test(s_t1, b_t1, mask, device, value_net).item()
 
             # save to buffer
-            self.buffer.append((s_t, a_t, r_t, s_t1, current_done, fro_size, val))
+            self.buffer.append(
+                (s_t, a_t, r_t, s_t1, current_done, fro_size, val))
 
             # training step
             if len(self.buffer) == self.nstep:
@@ -394,7 +408,7 @@ class A2C(object):
 
                 # perform gradient step
                 self.train(s_j_batch, a_batch, mask_batch, discount_rewards, y_adv_batch,
-                            device, policy_net, value_net, optimizer)
+                           device, policy_net, value_net, optimizer)
                 temp_loss_data.append([self.step_t, self.temp_loss])
                 self.buffer.clear()
 
@@ -408,21 +422,27 @@ class A2C(object):
                 env = robot.ExplorationEnv(self.map_size, 0, Test)
                 done = False
 
-            data_all = data_all.append({"Step": self.step_t, "Reward": r_t}, ignore_index=True)
+            data_all = data_all.append(
+                {"Step": self.step_t, "Reward": r_t}, ignore_index=True)
             self.total_reward = np.append(self.total_reward, r_t)
 
             # save progress every 50000 iterations
             if self.step_t % 5e4 == 0:
-                torch.save(policy_net.state_dict(), self.weights_path + 'MyModel.pt')
+                torch.save(policy_net.state_dict(),
+                           self.weights_path + 'MyModel.pt')
             if self.step_t > 1000:
-                new_average_reward = np.average(self.total_reward[len(self.total_reward) - 1000:])
+                new_average_reward = np.average(
+                    self.total_reward[len(self.total_reward) - 1000:])
                 if self.step_t % 1e2 == 0:
                     temp_reward_data.append([self.step_t, new_average_reward])
 
-        np.savetxt(self.object_path + "temp_reward.csv", temp_reward_data, delimiter=",")
-        np.savetxt(self.object_path + "temp_loss.csv", temp_loss_data, delimiter=",")
+        np.savetxt(self.object_path + "temp_reward.csv",
+                   temp_reward_data, delimiter=",")
+        np.savetxt(self.object_path + "temp_loss.csv",
+                   temp_loss_data, delimiter=",")
         data_all.to_csv(self.reward_data_path + "reward_data.csv", index=False)
-        torch.save(policy_net.state_dict(), self.object_path + 'Model_Policy.pt')
+        torch.save(policy_net.state_dict(),
+                   self.object_path + 'Model_Policy.pt')
         torch.save(value_net.state_dict(), self.object_path + 'Model_Value.pt')
 
     def data_process(self, data, device):
