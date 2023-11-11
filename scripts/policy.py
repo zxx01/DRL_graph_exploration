@@ -1,8 +1,8 @@
-import numpy as np
 import os
-from collections import deque
 import gc
 import random
+from collections import deque
+import numpy as np
 import pandas as pd
 from scipy.special import softmax
 import torch

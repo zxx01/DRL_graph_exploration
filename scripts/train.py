@@ -1,11 +1,11 @@
-import numpy as np
 import os
 import pickle
+import subprocess
+import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import Networks
 from policy import DeepQ, A2C
-import subprocess
 
 # setup the training model and method
 training_method = "DQN"  # DQN, A2C
