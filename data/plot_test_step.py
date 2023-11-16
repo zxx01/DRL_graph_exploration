@@ -14,15 +14,19 @@ elif map_size == 80:
 elif map_size == 100:
     cut_step = 4000
 
-test_result0 = pd.read_csv("../data/test_result/" + str(map_size) + "_Others.csv")
-test_result1 = pd.read_csv("../data/test_result/" + str(map_size) + "_DQN_GCN.csv")
-test_result2 = pd.read_csv("../data/test_result/" + str(map_size) + "_A2C_GG-NN.csv")
+test_result0 = pd.read_csv("../data/test_result/" +
+                           str(map_size) + "_Others.csv")
+test_result1 = pd.read_csv("../data/test_result/" +
+                           str(map_size) + "_DQN_GCN.csv")
+test_result2 = pd.read_csv("../data/test_result/" +
+                           str(map_size) + "_A2C_GG-NN.csv")
 
 test_result0['Category'] = pd.Categorical(test_result0['Category'],
                                           ["Nearest Frontier", "Random", "EM", "Supervised+GCN"])
 test_result0 = test_result0.sort_values('Category')
 
-test_result = pd.concat([test_result0, test_result1, test_result2], ignore_index=True)
+test_result = pd.concat(
+    [test_result0, test_result1, test_result2], ignore_index=True)
 
 indexNames = test_result[test_result['Step'] > cut_step].index
 test_result.drop(indexNames, inplace=True)
@@ -49,7 +53,8 @@ sns.set_palette(sns.color_palette(flatui))
 f2 = plt.figure(2)
 if map_size > 40:
     plt.ylim((0.4, 1.9))
-sns.lineplot(x='Step', y='Landmarks error', hue='Category', data=test_result, legend=False)
+sns.lineplot(x='Step', y='Landmarks error', hue='Category',
+             data=test_result, legend=False)
 f2.tight_layout(pad=0)
 
 sns.set(style="darkgrid", color_codes=True, font="sans-serif", font_scale=1.5)
@@ -57,6 +62,7 @@ sns.set_palette(sns.color_palette(flatui))
 f3 = plt.figure(3)  # [6.4, 4.8]
 if map_size > 40:
     plt.ylim((-0.2, 27))
-sns.lineplot(x='Step', y='Max localization uncertainty', hue='Category', data=test_result, legend=False)
+sns.lineplot(x='Step', y='Max localization uncertainty',
+             hue='Category', data=test_result, legend=False)
 f3.tight_layout(pad=0)
 plt.show()

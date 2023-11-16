@@ -1,7 +1,7 @@
-import seaborn as sns
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 import os
 
 directory = "reward_data/"
@@ -24,7 +24,7 @@ for folder, policy in folder_policy_name:
     # define category
     df['Category'] = policy
 
-    data_all = data_all.append(df, ignore_index=True)
+    data_all = pd.concat([data_all, df], ignore_index=True)
 
 data_all['Reward'] = data_all['Reward'].iloc[::-1].rolling(10000).mean()
 indexNames = data_all[data_all['Step'] > 1000000 - 10000].index
@@ -36,7 +36,8 @@ sns.set(style="darkgrid", color_codes=True, font="sans-serif", font_scale=1.5)
 sns.set_palette(sns.color_palette(flatui))
 
 fig = plt.figure(1, figsize=(10.4, 4.8))
-sns.lineplot(x='Step', y='Average reward', hue='Category', ci=None, data=data_all)
+sns.lineplot(x='Step', y='Average reward',
+             hue='Category', errorbar=None, data=data_all)
 plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 plt.xlim((-50000, 1000000))
 plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
