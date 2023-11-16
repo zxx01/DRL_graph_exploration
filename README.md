@@ -68,7 +68,14 @@ export LD_LIBRARY_PATH=/path/to/folder/anaconda3/envs/env_name/lib:$LD_LIBRARY_P
 ```
 ## Issues
 1. There is an unsolved memory leak issue in the C++ code. So we use the python subprocess module to run the simulation training. The data in the process will be saved and reloaded every 10000 iterations.
+
 2. If run in on ubuntu 20.04, please add `set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O3")` in CMakeLists.txt.
+
+3. If you have a error `AttributeError:module 'distutils' has no attribute 'version'`, please install the appropriate version of distutils.
+    ```shell
+    pip install setuptools==59.5.0
+    ```
+
 
 ## How to Run?
 - To run the saved policy:

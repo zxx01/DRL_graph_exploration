@@ -196,8 +196,8 @@ class DeepQ(object):
                 env = robot.ExplorationEnv(self.map_size, 0, Test)
                 done = False
 
-            data_all = data_all.append(
-                {"Step": self.step_t, "Reward": r_t}, ignore_index=True)
+            new_row_df = pd.DataFrame([{"Step": self.step_t, "Reward": r_t}])
+            data_all = pd.concat([data_all, new_row_df], ignore_index=True)
             self.total_reward = np.append(self.total_reward, r_t)
 
             # save progress every 50000 iterations
@@ -422,8 +422,8 @@ class A2C(object):
                 env = robot.ExplorationEnv(self.map_size, 0, Test)
                 done = False
 
-            data_all = data_all.append(
-                {"Step": self.step_t, "Reward": r_t}, ignore_index=True)
+            new_row_df = pd.DataFrame([{"Step": self.step_t, "Reward": r_t}])
+            data_all = pd.concat([data_all, new_row_df], ignore_index=True)
             self.total_reward = np.append(self.total_reward, r_t)
 
             # save progress every 50000 iterations

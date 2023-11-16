@@ -391,8 +391,8 @@ class ExplorationEnv(gym.Env):
         while True:
             # Reset seed in configuration
             if not self.test:
-                seed1 = self.np_random.randint(0, np.iinfo(np.int32).max, dtype=np.int32)
-                seed2 = self.np_random.randint(0, np.iinfo(np.int32).max, dtype=np.int32)
+                seed1 = self.np_random.integers(0, np.iinfo(np.int32).max, dtype=np.int32)
+                seed2 = self.np_random.integers(0, np.iinfo(np.int32).max, dtype=np.int32)
             else:
                 seed1 = self.env_index
                 seed2 = self.env_index
