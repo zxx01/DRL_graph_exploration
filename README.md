@@ -69,9 +69,11 @@ export LD_LIBRARY_PATH=/path/to/folder/anaconda3/envs/env_name/lib:$LD_LIBRARY_P
 ## Issues
 1. There is an unsolved memory leak issue in the C++ code. So we use the python subprocess module to run the simulation training. The data in the process will be saved and reloaded every 10000 iterations.
 
-2. If run in on ubuntu 20.04, please add `set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O3")` in CMakeLists.txt.
+2. The code was compiled on a local machine running Ubuntu 20.04 as the operating system with a GTX 3090 GPU with Cuda 11.2 to speed up training/inference with pytorch. However, because of very large amount of training (1 million epochs as shown in figure 3b in the paper), training was not possible as it took about 2 hours to run for about 12,000 epochs, which is about 83 hours total without checkpointing implemented in the original code. Due to the difficulties compiling on a cloud computing server, we trained for a limited number of epochs (10,000) on the local computer with a GPU.
 
-3. If you have a error `AttributeError:module 'distutils' has no attribute 'version'`, please install the appropriate version of distutils.
+3. If run in on ubuntu 20.04, please add `set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O3")` in CMakeLists.txt.
+
+4. If you have a error `AttributeError:module 'distutils' has no attribute 'version'`, please install the appropriate version of distutils.
     ```shell
     pip install setuptools==59.5.0
     ```

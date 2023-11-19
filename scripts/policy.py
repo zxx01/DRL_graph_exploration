@@ -472,21 +472,21 @@ class A2C(object):
     def policy_cost(self, prob, advantages, action, mask):
         prob_flat = prob.view(-1)
         advantages_flat = advantages.view(-1)
-        advantages_flat = torch.masked_select(advantages_flat, mask)
-        action = torch.masked_select(action, mask)
-        log_prob = prob_flat.log()
+        advantages_flat = torch.masked_select(advantages_flat, mask).to(torch.float32)
+        action = torch.masked_select(action, mask).to(torch.float32)
+        log_prob = prob_flat.log().to(torch.float32)
         policy_loss = -torch.mul(log_prob, advantages_flat)
         policy_loss = torch.mul(policy_loss, action).sum() / self.nstep
         return policy_loss
 
     def value_cost(self, pred, target):
-        pred_flat = pred.view(-1)
-        target_flat = target.view(-1)
+        pred_flat = pred.view(-1).to(torch.float32)
+        target_flat = target.view(-1).to(torch.float32)
         loss = F.mse_loss(pred_flat, target_flat)
         return loss
 
     def entropy_loss(self, prob):
-        prob_flat = prob.view(-1).detach()
+        prob_flat = prob.view(-1).detach().to(torch.float32)
         entro = -torch.mul(prob_flat.log(), prob_flat).sum() / self.nstep
         self.entro = entro.item()
         return entro

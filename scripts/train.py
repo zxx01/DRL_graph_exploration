@@ -8,8 +8,8 @@ import Networks
 from policy import DeepQ, A2C
 
 # setup the training model and method
-training_method = "DQN"  # DQN, A2C
-model_name = "GCN"  # GCN, GG-NN, g-U-Net
+training_method = "A2C"  # DQN, A2C
+model_name = "g-U-Net"  # GCN, GG-NN, g-U-Net
 
 # setup local file paths
 case_path = training_method + "_" + model_name + "/"
@@ -25,10 +25,10 @@ writer = SummaryWriter(log_dir=log_path)
 
 # choose training method
 if training_method == "DQN":
-    # # create a training object
+    # create a training object
     dgrl_training = DeepQ(case_path, model_name)
     # define training parameters
-    epoch_nums = dgrl_training.EXPLORE/dgrl_training.epoch
+    epoch_nums = dgrl_training.EXPLORE / dgrl_training.epoch
     # dump pickle file
     full_file_name = object_path + 'saved_training.pkl'
     with open(full_file_name, 'wb') as f:
