@@ -1,12 +1,12 @@
-# include <cmath>
-# include <cstdlib>
-# include <iomanip>
-# include <iostream>
-# include <ctime>
+#include <cmath>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <ctime>
 
 using namespace std;
 
-# include "halton/halton.hpp"
+#include "halton/halton.hpp"
 
 //****************************************************************************80
 
@@ -59,25 +59,30 @@ double *halton(int i, int m)
   r = new double[m];
   t = new int[m];
 
-  for (j = 0; j < m; j++) {
+  for (j = 0; j < m; j++)
+  {
     t[j] = i;
   }
-//
-//  Carry out the computation.
-//
-  for (j = 0; j < m; j++) {
-    prime_inv[j] = 1.0 / (double) (prime(j + 1));
+  //
+  //  Carry out the computation.
+  //
+  for (j = 0; j < m; j++)
+  {
+    prime_inv[j] = 1.0 / (double)(prime(j + 1));
   }
 
-  for (j = 0; j < m; j++) {
+  for (j = 0; j < m; j++)
+  {
     r[j] = 0.0;
   }
 
-  while (0 < i4vec_sum(m, t)) {
-    for (j = 0; j < m; j++) {
+  while (0 < i4vec_sum(m, t))
+  {
+    for (j = 0; j < m; j++)
+    {
       d = (t[j] % prime(j + 1));
-      r[j] = r[j] + (double) (d) * prime_inv[j];
-      prime_inv[j] = prime_inv[j] / (double) (prime(j + 1));
+      r[j] = r[j] + (double)(d)*prime_inv[j];
+      prime_inv[j] = prime_inv[j] / (double)(prime(j + 1));
       t[j] = (t[j] / prime(j + 1));
     }
   }
@@ -139,25 +144,30 @@ double *halton_base(int i, int m, int b[])
   r = new double[m];
   t = new int[m];
 
-  for (j = 0; j < m; j++) {
+  for (j = 0; j < m; j++)
+  {
     t[j] = i;
   }
-//
-//  Carry out the computation.
-//
-  for (j = 0; j < m; j++) {
-    b_inv[j] = 1.0 / (double) (b[j]);
+  //
+  //  Carry out the computation.
+  //
+  for (j = 0; j < m; j++)
+  {
+    b_inv[j] = 1.0 / (double)(b[j]);
   }
 
-  for (j = 0; j < m; j++) {
+  for (j = 0; j < m; j++)
+  {
     r[j] = 0.0;
   }
 
-  while (0 < i4vec_sum(m, t)) {
-    for (j = 0; j < m; j++) {
+  while (0 < i4vec_sum(m, t))
+  {
+    for (j = 0; j < m; j++)
+    {
       d = (t[j] % b[j]);
-      r[j] = r[j] + (double) (d) * b_inv[j];
-      b_inv[j] = b_inv[j] / (double) (b[j]);
+      r[j] = r[j] + (double)(d)*b_inv[j];
+      b_inv[j] = b_inv[j] / (double)(b[j]);
       t[j] = (t[j] / b[j]);
     }
   }
@@ -205,25 +215,28 @@ int halton_inverse(double r[], int m)
   int p;
   double t;
 
-  for (j = 0; j < m; j++) {
-    if (r[j] < 0.0 || 1.0 <= r[j]) {
+  for (j = 0; j < m; j++)
+  {
+    if (r[j] < 0.0 || 1.0 <= r[j])
+    {
       cerr << "\n";
       cerr << "HALTON_INVERSE - Fatal error\n";
       cerr << "  0 <= R < 1.0 is required.\n";
       exit(1);
     }
   }
-//
-//  Invert using the first component only, because working with base
-//  2 is accurate.
-//
+  //
+  //  Invert using the first component only, because working with base
+  //  2 is accurate.
+  //
   i = 0;
   t = r[0];
   p = 1;
 
-  while (t != 0.0) {
+  while (t != 0.0)
+  {
     t = t * 2.0;
-    d = (int) (t);
+    d = (int)(t);
     i = i + d * p;
     p = p * 2;
     t = r8_mod(t, 1.0);
@@ -263,13 +276,13 @@ double *halton_sequence(int i1, int i2, int m)
 //
 //  Parameters:
 //
-//    Input, int I1, I2, the indices of the first and last 
+//    Input, int I1, I2, the indices of the first and last
 //    elements of the sequence.  0 <= I1, I2.
 //
 //    Input, int M, the spatial dimension.
 //    1 <= M <= 100.
 //
-//    Output, double HALTON_SEQUENCE[M*(abs(I1-I2)+1)], the elements of the 
+//    Output, double HALTON_SEQUENCE[M*(abs(I1-I2)+1)], the elements of the
 //    sequence with indices I1 through I2.
 //
 {
@@ -287,38 +300,48 @@ double *halton_sequence(int i1, int i2, int m)
   r = new double[m * (abs(i1 - i2) + 1)];
   t = new int[m];
 
-  if (i1 <= i2) {
+  if (i1 <= i2)
+  {
     i3 = +1;
-  } else {
+  }
+  else
+  {
     i3 = -1;
   }
 
   n = abs(i2 - i1) + 1;
 
-  for (j = 0; j < n; j++) {
-    for (i = 0; i < m; i++) {
+  for (j = 0; j < n; j++)
+  {
+    for (i = 0; i < m; i++)
+    {
       r[i + j * m] = 0.0;
     }
   }
 
   i = i1;
 
-  for (k = 0; k < n; k++) {
-    for (j = 0; j < m; j++) {
+  for (k = 0; k < n; k++)
+  {
+    for (j = 0; j < m; j++)
+    {
       t[j] = i;
     }
-//
-//  Carry out the computation.
-//
-    for (j = 0; j < m; j++) {
-      prime_inv[j] = 1.0 / (double) (prime(j + 1));
+    //
+    //  Carry out the computation.
+    //
+    for (j = 0; j < m; j++)
+    {
+      prime_inv[j] = 1.0 / (double)(prime(j + 1));
     }
 
-    while (0 < i4vec_sum(m, t)) {
-      for (j = 0; j < m; j++) {
+    while (0 < i4vec_sum(m, t))
+    {
+      for (j = 0; j < m; j++)
+      {
         d = (t[j] % prime(j + 1));
-        r[j + k * m] = r[j + k * m] + (double) (d) * prime_inv[j];
-        prime_inv[j] = prime_inv[j] / (double) (prime(j + 1));
+        r[j + k * m] = r[j + k * m] + (double)(d)*prime_inv[j];
+        prime_inv[j] = prime_inv[j] / (double)(prime(j + 1));
         t[j] = (t[j] / prime(j + 1));
       }
     }
@@ -379,7 +402,8 @@ int i4vec_sum(int n, int a[])
   int sum;
 
   sum = 0;
-  for (i = 0; i < n; i++) {
+  for (i = 0; i < n; i++)
+  {
     sum = sum + a[i];
   }
 
@@ -437,7 +461,7 @@ int prime(int n)
 //    is returned as -1.
 //
 {
-# define PRIME_MAX 1600
+#define PRIME_MAX 1600
 
   int npvec[PRIME_MAX] = {
       2, 3, 5, 7, 11, 13, 17, 19, 23, 29,
@@ -601,13 +625,20 @@ int prime(int n)
       13313, 13327, 13331, 13337, 13339, 13367, 13381, 13397, 13399, 13411,
       13417, 13421, 13441, 13451, 13457, 13463, 13469, 13477, 13487, 13499};
 
-  if (n == -1) {
+  if (n == -1)
+  {
     return PRIME_MAX;
-  } else if (n == 0) {
+  }
+  else if (n == 0)
+  {
     return 1;
-  } else if (n <= PRIME_MAX) {
+  }
+  else if (n <= PRIME_MAX)
+  {
     return npvec[n - 1];
-  } else {
+  }
+  else
+  {
     cerr << "\n";
     cerr << "PRIME - Fatal error!\n";
     cerr << "  Unexpected input value of n = " << n << "\n";
@@ -615,7 +646,7 @@ int prime(int n)
   }
 
   return 0;
-# undef PRIME_MAX
+#undef PRIME_MAX
 }
 //****************************************************************************80
 
@@ -668,18 +699,22 @@ double r8_mod(double x, double y)
 {
   double value;
 
-  if (y == 0.0) {
+  if (y == 0.0)
+  {
     cerr << "\n";
     cerr << "R8_MOD - Fatal error!\n";
     cerr << "  R8_MOD ( X, Y ) called with Y = " << y << "\n";
     exit(1);
   }
 
-  value = x - ((double) ((int) (x / y))) * y;
+  value = x - ((double)((int)(x / y))) * y;
 
-  if (x < 0.0 && 0.0 < value) {
+  if (x < 0.0 && 0.0 < value)
+  {
     value = value - fabs(y);
-  } else if (0.0 < x && value < 0.0) {
+  }
+  else if (0.0 < x && value < 0.0)
+  {
     value = value + fabs(y);
   }
 
@@ -773,7 +808,7 @@ void r8mat_print_some(int m, int n, double a[], int ilo, int jlo, int ihi,
 //    Input, string TITLE, a title.
 //
 {
-# define INCX 5
+#define INCX 5
 
   int i;
   int i2hi;
@@ -785,55 +820,68 @@ void r8mat_print_some(int m, int n, double a[], int ilo, int jlo, int ihi,
   cout << "\n";
   cout << title << "\n";
 
-  if (m <= 0 || n <= 0) {
+  if (m <= 0 || n <= 0)
+  {
     cout << "\n";
     cout << "  (None)\n";
     return;
   }
-//
-//  Print the columns of the matrix, in strips of 5.
-//
-  for (j2lo = jlo; j2lo <= jhi; j2lo = j2lo + INCX) {
+  //
+  //  Print the columns of the matrix, in strips of 5.
+  //
+  for (j2lo = jlo; j2lo <= jhi; j2lo = j2lo + INCX)
+  {
     j2hi = j2lo + INCX - 1;
-    if (n < j2hi) {
+    if (n < j2hi)
+    {
       j2hi = n;
     }
-    if (jhi < j2hi) {
+    if (jhi < j2hi)
+    {
       j2hi = jhi;
     }
     cout << "\n";
-//
-//  For each column J in the current range...
-//
-//  Write the header.
-//
+    //
+    //  For each column J in the current range...
+    //
+    //  Write the header.
+    //
     cout << "  Col:    ";
-    for (j = j2lo; j <= j2hi; j++) {
+    for (j = j2lo; j <= j2hi; j++)
+    {
       cout << setw(7) << j - 1 << "       ";
     }
     cout << "\n";
     cout << "  Row\n";
     cout << "\n";
-//
-//  Determine the range of the rows in this strip.
-//
-    if (1 < ilo) {
+    //
+    //  Determine the range of the rows in this strip.
+    //
+    if (1 < ilo)
+    {
       i2lo = ilo;
-    } else {
+    }
+    else
+    {
       i2lo = 1;
     }
-    if (ihi < m) {
+    if (ihi < m)
+    {
       i2hi = ihi;
-    } else {
+    }
+    else
+    {
       i2hi = m;
     }
 
-    for (i = i2lo; i <= i2hi; i++) {
-//
-//  Print out (up to) 5 entries in row I, that lie in the current strip.
-//
+    for (i = i2lo; i <= i2hi; i++)
+    {
+      //
+      //  Print out (up to) 5 entries in row I, that lie in the current strip.
+      //
       cout << setw(5) << i - 1 << ": ";
-      for (j = j2lo; j <= j2hi; j++) {
+      for (j = j2lo; j <= j2hi; j++)
+      {
         cout << setw(12) << a[i - 1 + (j - 1) * m] << "  ";
       }
       cout << "\n";
@@ -841,7 +889,7 @@ void r8mat_print_some(int m, int n, double a[], int ilo, int jlo, int ihi,
   }
 
   return;
-# undef INCX
+#undef INCX
 }
 //****************************************************************************80
 
@@ -874,7 +922,7 @@ void timestamp()
 //    None
 //
 {
-# define TIME_SIZE 40
+#define TIME_SIZE 40
 
   static char time_buffer[TIME_SIZE];
   const struct std::tm *tm_ptr;
@@ -889,5 +937,5 @@ void timestamp()
   std::cout << time_buffer << "\n";
 
   return;
-# undef TIME_SIZE
+#undef TIME_SIZE
 }

@@ -1,3 +1,4 @@
+import matplotlib as mpl
 import sys
 import os
 import math
@@ -9,24 +10,21 @@ from gym import error, spaces
 from gym.utils import seeding
 sys.path.append(sys.path[0] + '/../..')
 sys.path.append(sys.path[0] + '/..')
-import matplotlib as mpl
 mpl.rcParams['pdf.fonttype'] = 42
 
 try:
     from envs.pyplanner2d import EMExplorer
     from envs.utils import load_config, plot_virtual_map, plot_virtual_map_cov, plot_path
 except ImportError as e:
-    raise error.DependencyNotInstalled('{}. Build em_exploration and export PYTHONPATH=build_dir'.format(e))
+    raise error.DependencyNotInstalled(
+        '{}. Build em_exploration and export PYTHONPATH=build_dir'.format(e))
 
 
 class ExplorationEnv(gym.Env):
     metadata = {'render.modes': ['human', 'state'],
                 'render.pause': 0.001}
 
-    def __init__(self,
-                 map_size,
-                 env_index,
-                 test):
+    def __init__(self, map_size, env_index, test):
         dir_path = os.path.dirname(os.path.realpath(__file__))
         config = dir_path + '/exploration_env.ini'
         self._config = load_config(config)
@@ -45,7 +43,8 @@ class ExplorationEnv(gym.Env):
 
         num_actions = self._sim._planner_params.num_actions
         self._step_length = self._sim._planner_params.max_edge_length
-        self._rotation_set = np.arange(0, np.pi * 2, np.pi * 2 / num_actions) - np.pi
+        self._rotation_set = np.arange(
+            0, np.pi * 2, np.pi * 2 / num_actions) - np.pi
         self._action_set = [np.array([np.cos(t) * self._step_length,
                                       np.sin(t) * self._step_length,
                                       t])
@@ -66,9 +65,12 @@ class ExplorationEnv(gym.Env):
         min_y, max_y = self._sim._map_params.min_y, self._sim._map_params.max_y
         self._pose = spaces.Box(low=np.array([min_x, min_y, -math.pi]),
                                 high=np.array([max_x, max_y, math.pi]), dtype=np.float32)
-        self._vm_cov_sigma = spaces.Box(low=0, high=self._max_sigma, dtype=np.float32, shape=(rows, cols))
-        self._vm_cov_angle = spaces.Box(low=-math.pi, high=math.pi, dtype=np.float32, shape=(rows, cols))
-        self._vm_prob = spaces.Box(low=0.0, high=1.0, shape=(rows, cols), dtype=np.float32)
+        self._vm_cov_sigma = spaces.Box(
+            low=0, high=self._max_sigma, dtype=np.float32, shape=(rows, cols))
+        self._vm_cov_angle = spaces.Box(
+            low=-math.pi, high=math.pi, dtype=np.float32, shape=(rows, cols))
+        self._vm_prob = spaces.Box(
+            low=0.0, high=1.0, shape=(rows, cols), dtype=np.float32)
         self.observation_space = spaces.Tuple([self._pose,
                                                self._vm_prob,
                                                self._vm_cov_sigma,
@@ -83,7 +85,7 @@ class ExplorationEnv(gym.Env):
         cov_array = self._sim._virtual_map.to_cov_array()
         self._obs_show = np.array(
             [self._sim.vehicle_position.x, self._sim.vehicle_position.y, self._sim.vehicle_position.theta]), \
-                         self._sim._virtual_map.to_array(), cov_array[0], cov_array[1]
+            self._sim._virtual_map.to_array(), cov_array[0], cov_array[1]
         self._obs = self._sim._virtual_map.to_array()
         return self._obs
 
@@ -92,7 +94,8 @@ class ExplorationEnv(gym.Env):
             distance = 0.0
         else:
             angle_weight = self._config.getfloat('Planner', 'angle_weight')
-            distance = math.sqrt(action.x ** 2 + action.y ** 2 + angle_weight * action.theta ** 2)
+            distance = math.sqrt(action.x ** 2 + action.y **
+                                 2 + angle_weight * action.theta ** 2)
         return self._sim.calculate_utility(distance)
 
     def step(self, action):
@@ -112,7 +115,8 @@ class ExplorationEnv(gym.Env):
         actions = []
         for edge in self._sim._planner.iter_solution():
             if self._sim._planner_params.reg_out:
-                actions.insert(0, (np.abs(np.asarray(self._rotation_set) - edge.get_odoms()[0].theta)).argmin())
+                actions.insert(
+                    0, (np.abs(np.asarray(self._rotation_set) - edge.get_odoms()[0].theta)).argmin())
             else:
                 actions.insert(0, edge.get_odoms()[0].theta)
         return actions
@@ -150,14 +154,17 @@ class ExplorationEnv(gym.Env):
 
         # calculating rewards for each actions
         for i, _ in enumerate(self._frontier):
-            rewards[i + key_size] = self._sim.simulations_reward(all_actions[i + key_size])
+            rewards[i +
+                    key_size] = self._sim.simulations_reward(all_actions[i + key_size])
         act_max = np.nanargmax(rewards)
         if self.is_nf(act_max):
             self.loop_clo = False
-            rewards = np.interp(rewards, (np.nanmin(rewards), np.nanmax(rewards)), (-1.0, 0.0))
+            rewards = np.interp(
+                rewards, (np.nanmin(rewards), np.nanmax(rewards)), (-1.0, 0.0))
         else:
             self.loop_clo = True
-            rewards = np.interp(rewards, (np.nanmin(rewards), np.nanmax(rewards)), (-1.0, 1.0))
+            rewards = np.interp(
+                rewards, (np.nanmin(rewards), np.nanmax(rewards)), (-1.0, 1.0))
         rewards[np.isnan(rewards)] = 0
         return rewards
 
@@ -171,8 +178,11 @@ class ExplorationEnv(gym.Env):
         error = 0.0
         for key, predicted in self._sim.map.iter_landmarks():
             landmark = self._sim.environment.get_landmark(key)
-            error += np.sqrt((landmark.point.x - predicted.point.x) ** 2 + (landmark.point.y - predicted.point.y) ** 2)
-        error += sigma0 * (self._sim.environment.get_landmark_size() - self._sim.map.get_landmark_size())
+            error += np.sqrt((landmark.point.x - predicted.point.x)
+                             ** 2 + (landmark.point.y - predicted.point.y) ** 2)
+        error += sigma0 * \
+            (self._sim.environment.get_landmark_size() -
+             self._sim.map.get_landmark_size())
         return error / self._sim.environment.get_landmark_size()
 
     def get_dist(self):
@@ -203,10 +213,12 @@ class ExplorationEnv(gym.Env):
         self._sim._slam.adjacency_degree_get()
         adjacency = np.array(self._sim._slam.adjacency_out())
         features = np.array(self._sim._slam.features_out())
-        adjacency = np.pad(adjacency, ((0, fro_size), (0, fro_size)), 'constant')
+        adjacency = np.pad(
+            adjacency, ((0, fro_size), (0, fro_size)), 'constant')
         features = np.pad(features, ((0, fro_size), (0, 0)), 'constant')
 
-        robot_location = [self._sim.vehicle_position.x, self._sim.vehicle_position.y]
+        robot_location = [self._sim.vehicle_position.x,
+                          self._sim.vehicle_position.y]
 
         # add frontiers to adjacency matrix
         for i in range(fro_size):
@@ -219,7 +231,8 @@ class ExplorationEnv(gym.Env):
                     adjacency[key_size - 1][i + key_size] = dist
                     adjacency[i + key_size][key_size - 1] = dist
                 else:
-                    dist = self.points2dist(frontier_point, self._sim._slam.get_key_points(index_node - 1))
+                    dist = self.points2dist(
+                        frontier_point, self._sim._slam.get_key_points(index_node - 1))
                     adjacency[index_node - 1][i + key_size] = dist
                     adjacency[i + key_size][index_node - 1] = dist
 
@@ -273,7 +286,8 @@ class ExplorationEnv(gym.Env):
         for i in range(fro_size):
             features_4[key_size + i][0] = 1
 
-        features = np.concatenate((features, features_2, features_5, features_3, features_4), axis=1)
+        features = np.concatenate(
+            (features, features_2, features_5, features_3, features_4), axis=1)
 
         # create global features
         avg_landmarks_error = np.mean(features[1:land_size + 1][:, 0])
@@ -287,7 +301,8 @@ class ExplorationEnv(gym.Env):
             return False
 
     def frontier(self):
-        vehicle_location = [self._sim.vehicle_position.x, self._sim.vehicle_position.y]
+        vehicle_location = [self._sim.vehicle_position.x,
+                            self._sim.vehicle_position.y]
 
         a = self._obs < 0.45
         free_index_i, free_index_j = np.nonzero(a)
@@ -299,18 +314,24 @@ class ExplorationEnv(gym.Env):
         self._frontier = []
         self._frontier_index = []
 
+        # extract landmarks
         for land_key in landmark_keys:
             points = list(self._sim._slam.get_key_points(land_key))
             all_landmarks.append(points)
 
+        # for ptr, id in enumerate(free_index_i):
         for ptr in range(len(free_index_i)):
             cur_i = free_index_i[ptr]
             cur_j = free_index_j[ptr]
             count = 0
-            cur_i_min = free_index_i[ptr] - 1 if free_index_i[ptr] - 1 >= 0 else 0
-            cur_i_max = free_index_i[ptr] + 1 if free_index_i[ptr] + 1 < self.leng_i_map else self.leng_i_map - 1
-            cur_j_min = free_index_j[ptr] - 1 if free_index_j[ptr] - 1 >= 0 else 0
-            cur_j_max = free_index_j[ptr] + 1 if free_index_j[ptr] + 1 < self.leng_j_map else self.leng_j_map - 1
+            cur_i_min = free_index_i[ptr] - \
+                1 if free_index_i[ptr] - 1 >= 0 else 0
+            cur_i_max = free_index_i[ptr] + 1 if free_index_i[ptr] + \
+                1 < self.leng_i_map else self.leng_i_map - 1
+            cur_j_min = free_index_j[ptr] - \
+                1 if free_index_j[ptr] - 1 >= 0 else 0
+            cur_j_max = free_index_j[ptr] + 1 if free_index_j[ptr] + \
+                1 < self.leng_j_map else self.leng_j_map - 1
 
             for ne_i in range(cur_i_min, cur_i_max + 1):
                 for ne_j in range(cur_j_min, cur_j_max + 1):
@@ -320,19 +341,22 @@ class ExplorationEnv(gym.Env):
             if count >= 2:
                 ind2co = self.index2coor(cur_i, cur_j)
                 if self._sim._map_params.min_x + self.ext <= ind2co[0] <= self._sim._map_params.max_x - self.ext \
-                        and self._sim._map_params.min_y + self.ext <= ind2co[
-                    1] <= self._sim._map_params.max_y - self.ext:
+                    and self._sim._map_params.min_y + self.ext <= ind2co[
+                        1] <= self._sim._map_params.max_y - self.ext:
                     all_frontiers.append(ind2co)
 
-        cur_fro = all_frontiers[self.nearest_frontier(vehicle_location, all_frontiers)]
+        cur_fro = all_frontiers[self.nearest_frontier(
+            vehicle_location, all_frontiers)]
         self._frontier.append(cur_fro)
         self._frontier_index.append([0])
 
         if not self._one_nearest_frontier:
             for ip, p in enumerate(all_landmarks):
-                cur_fro = all_frontiers[self.nearest_frontier(p, all_frontiers)]
+                cur_fro = all_frontiers[self.nearest_frontier(
+                    p, all_frontiers)]
                 try:
-                    self._frontier_index[self._frontier.index(cur_fro)].append(ip + 1)
+                    self._frontier_index[self._frontier.index(
+                        cur_fro)].append(ip + 1)
                 except ValueError:
                     self._frontier.append(cur_fro)
                     self._frontier_index.append([ip + 1])
@@ -358,21 +382,28 @@ class ExplorationEnv(gym.Env):
         return min_index
 
     def show_frontier(self, index):
-        plt.plot(np.transpose(self._frontier)[0], np.transpose(self._frontier)[1], 'mo')
-        plt.plot(np.transpose(self._frontier)[0][index], np.transpose(self._frontier)[1][index], 'ro')
+        plt.plot(np.transpose(self._frontier)[
+                 0], np.transpose(self._frontier)[1], 'mo')
+        plt.plot(np.transpose(self._frontier)[0][index], np.transpose(
+            self._frontier)[1][index], 'ro')
 
     def index2coor(self, matrix_i, matrix_j):
-        x = (matrix_j + 0.5) * self.map_resolution + self._sim._map_params.min_x
-        y = (matrix_i + 0.5) * self.map_resolution + self._sim._map_params.min_y
+        x = (matrix_j + 0.5) * self.map_resolution + \
+            self._sim._map_params.min_x
+        y = (matrix_i + 0.5) * self.map_resolution + \
+            self._sim._map_params.min_y
         return [x, y]
 
     def coor2index(self, x, y):
-        map_j = int(round((x - self._sim._map_params.min_x) / self.map_resolution - 0.5))
-        map_i = int(round((y - self._sim._map_params.min_y) / self.map_resolution - 0.5))
+        map_j = int(round((x - self._sim._map_params.min_x) /
+                    self.map_resolution - 0.5))
+        map_i = int(round((y - self._sim._map_params.min_y) /
+                    self.map_resolution - 0.5))
         return [map_i, map_j]
 
     def points2dist(self, point1, point2):
-        dist = np.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
+        dist = np.sqrt((point1[0] - point2[0]) ** 2 +
+                       (point1[1] - point2[1]) ** 2)
         return dist
 
     def diff_theta(self, point1, point2, root_theta):
@@ -391,11 +422,14 @@ class ExplorationEnv(gym.Env):
         while True:
             # Reset seed in configuration
             if not self.test:
-                seed1 = self.np_random.integers(0, np.iinfo(np.int32).max, dtype=np.int32)
-                seed2 = self.np_random.integers(0, np.iinfo(np.int32).max, dtype=np.int32)
+                seed1 = self.np_random.integers(
+                    0, np.iinfo(np.int32).max, dtype=np.int32)
+                seed2 = self.np_random.integers(
+                    0, np.iinfo(np.int32).max, dtype=np.int32)
             else:
                 seed1 = self.env_index
                 seed2 = self.env_index
+
             landmark_size = int(self.map_size ** 2 * 0.005)
             self._config.set('Simulator', 'seed', str(seed1))
             self._config.set('Planner', 'seed', str(seed1))
@@ -430,15 +464,19 @@ class ExplorationEnv(gym.Env):
                 self._viewer = plt.gcf()
                 plt.ion()
                 plt.tight_layout()
-                plt.xlim((self._sim._map_params.min_x + 14, self._sim._map_params.max_x - 14))
-                plt.ylim((self._sim._map_params.min_y + 14, self._sim._map_params.max_y - 14))
+                plt.xlim((self._sim._map_params.min_x + 14,
+                         self._sim._map_params.max_x - 14))
+                plt.ylim((self._sim._map_params.min_y + 14,
+                         self._sim._map_params.max_y - 14))
                 plt.show()
             else:
                 self._viewer.clf()
                 self._sim.plot()
                 # plot_path(self._sim._planner, dubins=False)
-                plt.xlim((self._sim._map_params.min_x + 14, self._sim._map_params.max_x - 14))
-                plt.ylim((self._sim._map_params.min_y + 14, self._sim._map_params.max_y - 14))
+                plt.xlim((self._sim._map_params.min_x + 14,
+                         self._sim._map_params.max_x - 14))
+                plt.ylim((self._sim._map_params.min_y + 14,
+                         self._sim._map_params.max_y - 14))
                 plt.draw()
             if action_index != -1:
                 self.show_frontier(action_index)
@@ -446,7 +484,7 @@ class ExplorationEnv(gym.Env):
         elif mode == 'state':
             # print self._obs
             # assert(len(self._obs_show) == 3)
-            print (self._viewer is None)
+            print(self._viewer is None)
             if self._viewer is None:
                 self._viewer = plt.subplots(1, 3, figsize=(18, 6))
                 plot_virtual_map(self._sim._virtual_map, self._sim._map_params,

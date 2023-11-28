@@ -74,10 +74,12 @@ class DeepQ(object):
         while temp_i < self.epoch:
             self.step_t += 1
             temp_i += 1
+
             # e-greedy scale down epsilon
             if self.epsilon > self.FINAL_EPSILON and self.step_t > self.OBSERVE:
                 self.epsilon -= (self.INITIAL_EPSILON -
                                  self.FINAL_EPSILON) / self.EXPLORE
+
             # get the input data (X, A)
             adjacency, featrues, globals_features, fro_size = env.graph_matrix()
             node_size = adjacency.shape[0]
@@ -472,7 +474,8 @@ class A2C(object):
     def policy_cost(self, prob, advantages, action, mask):
         prob_flat = prob.view(-1)
         advantages_flat = advantages.view(-1)
-        advantages_flat = torch.masked_select(advantages_flat, mask).to(torch.float32)
+        advantages_flat = torch.masked_select(
+            advantages_flat, mask).to(torch.float32)
         action = torch.masked_select(action, mask).to(torch.float32)
         log_prob = prob_flat.log().to(torch.float32)
         policy_loss = -torch.mul(log_prob, advantages_flat)

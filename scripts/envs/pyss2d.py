@@ -9,11 +9,14 @@ import build.ss2d as ss2d
 
 def read_sensor_params(config):
     sensor_params = ss2d.BearingRangeSensorModelParameter()
-    sensor_params.bearing_noise = math.radians(config.getfloat('Sensor Model', 'bearing_noise'))
+    sensor_params.bearing_noise = math.radians(
+        config.getfloat('Sensor Model', 'bearing_noise'))
     # sensor_params.range_noise = math.radians(config.getfloat('Sensor Model', 'range_noise'))
     sensor_params.range_noise = config.getfloat('Sensor Model', 'range_noise')
-    sensor_params.min_bearing = math.radians(config.getfloat('Sensor Model', 'min_bearing'))
-    sensor_params.max_bearing = math.radians(config.getfloat('Sensor Model', 'max_bearing'))
+    sensor_params.min_bearing = math.radians(
+        config.getfloat('Sensor Model', 'min_bearing'))
+    sensor_params.max_bearing = math.radians(
+        config.getfloat('Sensor Model', 'max_bearing'))
     sensor_params.min_range = config.getfloat('Sensor Model', 'min_range')
     sensor_params.max_range = config.getfloat('Sensor Model', 'max_range')
     return sensor_params
@@ -21,8 +24,10 @@ def read_sensor_params(config):
 
 def read_control_params(config):
     control_params = ss2d.SimpleControlModelParameter()
-    control_params.rotation_noise = math.radians(config.getfloat('Control Model', 'rotation_noise'))
-    control_params.translation_noise = config.getfloat('Control Model', 'translation_noise')
+    control_params.rotation_noise = math.radians(
+        config.getfloat('Control Model', 'rotation_noise'))
+    control_params.translation_noise = config.getfloat(
+        'Control Model', 'translation_noise')
     return control_params
 
 
@@ -33,15 +38,18 @@ def read_environment_params(config):
     environment_params.min_y = config.getfloat('Environment', 'min_y')
     environment_params.max_y = config.getfloat('Environment', 'max_y')
     environment_params.max_steps = config.getfloat('Environment', 'max_steps')
-    environment_params.safe_distance = config.getfloat('Environment', 'safe_distance')
+    environment_params.safe_distance = config.getfloat(
+        'Environment', 'safe_distance')
     return environment_params
 
 
 def read_virtual_map_params(config, map_params):
     virtual_map_params = ss2d.VirtualMapParameter(map_params)
-    virtual_map_params.resolution = config.getfloat('Virtual Map', 'resolution')
+    virtual_map_params.resolution = config.getfloat(
+        'Virtual Map', 'resolution')
     virtual_map_params.sigma0 = config.getfloat('Virtual Map', 'sigma0')
-    virtual_map_params.num_samples = config.getint('Virtual Map', 'num_samples')
+    virtual_map_params.num_samples = config.getint(
+        'Virtual Map', 'num_samples')
     return virtual_map_params
 
 
@@ -68,12 +76,13 @@ class SS2D(object):
         self._control_params = read_control_params(self._config)
         self._environment_params = read_environment_params(self._config)
         self._map_params = read_map_params(self._config)
-        self._virtual_map_params = read_virtual_map_params(self._config, self._map_params)
+        self._virtual_map_params = read_virtual_map_params(
+            self._config, self._map_params)
 
         # x0 = self._config.getfloat('Simulator', 'x0')
         # y0 = self._config.getfloat('Simulator', 'y0')
         # theta0 = math.radians(self._config.getfloat('Simulator', 'theta0'))
-        
+
         # lo = int(self._config.getfloat('Simulator', 'lo'))
         # ini_lo = []
         # for ii in range(-10,10,2):
@@ -88,21 +97,25 @@ class SS2D(object):
 
         lo = int(self._config.getfloat('Simulator', 'lo'))
         np.random.seed(lo+1)
-        x0 = float(np.random.randint(self._map_params.max_x)-self._map_params.max_x/2)
+        x0 = float(np.random.randint(self._map_params.max_x) -
+                   self._map_params.max_x/2)
         np.random.seed(lo+2)
-        y0 = float(np.random.randint(self._map_params.max_x)-self._map_params.max_x/2)
+        y0 = float(np.random.randint(self._map_params.max_x) -
+                   self._map_params.max_x/2)
         np.random.seed(lo+3)
         theta0 = math.radians(float(np.random.randint(360)))
         sigma_x0 = self._config.getfloat('Simulator', 'sigma_x0')
         sigma_y0 = self._config.getfloat('Simulator', 'sigma_y0')
-        sigma_theta0 = math.radians(self._config.getfloat('Simulator', 'sigma_theta0'))
+        sigma_theta0 = math.radians(
+            self._config.getfloat('Simulator', 'sigma_theta0'))
         num_random_landmarks = self._config.getint('Simulator', 'num')
 
         seed = self._config.getint('Simulator', 'seed')
         if seed < 0:
             seed = int(time() * 1e6)
 
-        self._sim = ss2d.Simulator2D(self._sensor_params, self._control_params, seed)
+        self._sim = ss2d.Simulator2D(
+            self._sensor_params, self._control_params, seed)
         self._sim.initialize_vehicle(ss2d.Pose2(x0, y0, theta0))
         self._slam = ss2d.SLAM2D(self._map_params)
         self._virtual_map = ss2d.VirtualMap(self._virtual_map_params, seed)
@@ -114,9 +127,11 @@ class SS2D(object):
             landmarks = []
             for xi, yi in zip(x, y):
                 landmarks.append(ss2d.Point2(xi, yi))
-            self._sim.random_landmarks(landmarks, num_random_landmarks, self._environment_params)
+            self._sim.random_landmarks(
+                landmarks, num_random_landmarks, self._environment_params)
         else:
-            self._sim.random_landmarks([], num_random_landmarks, self._environment_params)
+            self._sim.random_landmarks(
+                [], num_random_landmarks, self._environment_params)
 
         self.verbose = verbose
         if self.verbose:
@@ -154,12 +169,14 @@ class SS2D(object):
 
     def update_virtual_map(self, update_probability=False, update_information=True):
         if update_probability:
-            self._virtual_map.update_probability(self._slam, self._sim.sensor_model)
+            self._virtual_map.update_probability(
+                self._slam, self._sim.sensor_model)
 
         if update_information:
-            self._virtual_map.update_information(self._slam.map, self._sim.sensor_model)
+            self._virtual_map.update_information(
+                self._slam.map, self._sim.sensor_model)
 
-    def sim_test(self,odom):
+    def sim_test(self, odom):
         estimated_pose = self._slam.map.get_current_vehicle().pose * ss2d.Pose2(*odom)
         # print "min_x", self._map_params.min_x
         if not self._map_params.min_x < estimated_pose.x < self._map_params.max_x or \

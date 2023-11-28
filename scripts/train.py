@@ -1,5 +1,6 @@
 import os
 import pickle
+import time
 import subprocess
 import numpy as np
 import torch
@@ -8,7 +9,7 @@ import Networks
 from policy import DeepQ, A2C
 
 # setup the training model and method
-training_method = "A2C"  # DQN, A2C
+training_method = "DQN"  # DQN, A2C
 model_name = "g-U-Net"  # GCN, GG-NN, g-U-Net
 
 # setup local file paths
@@ -82,10 +83,17 @@ elif training_method == "A2C":
     torch.save(modela.state_dict(), policy_model_name)
     torch.save(modelc.state_dict(), value_model_name)
 
-
+time_total = 0
 for i in range(int(epoch_nums)):
     cmd = "python3 run_training.py " + training_method + " " + model_name
+
+    time_start = time.time()
     subprocess.call(cmd, shell=True)
+    time_end = time.time()
+    duration = time_end - time_start
+    time_total = time_total + duration
+    print(f"10000 epoches time: {duration} s.")
+
     temp_reward_data = np.loadtxt(
         object_path + "temp_reward.csv", delimiter=",")
     temp_loss_data = np.loadtxt(object_path + "temp_loss.csv", delimiter=",")
@@ -97,3 +105,6 @@ for i in range(int(epoch_nums)):
         step_t = temp_loss_data[j][0]
         loss = temp_loss_data[j][1]
         writer.add_scalar('Train/loss', loss, step_t)
+
+
+print(f"1e6 total time: {duration} s.")

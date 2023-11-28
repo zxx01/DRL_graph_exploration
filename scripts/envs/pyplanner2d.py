@@ -16,7 +16,8 @@ def read_dubins_params(config):
     dubins_params.dt = config.getfloat('Dubins', 'dt')
     dubins_params.min_duration = config.getfloat('Dubins', 'min_duration')
     dubins_params.max_duration = config.getfloat('Dubins', 'max_duration')
-    dubins_params.tolerance_radius = config.getfloat('Dubins', 'tolerance_radius')
+    dubins_params.tolerance_radius = config.getfloat(
+        'Dubins', 'tolerance_radius')
     return dubins_params
 
 
@@ -24,14 +25,18 @@ def read_planner_params(config):
     planner_params = planner2d.EMPlannerParameter()
     planner_params.verbose = config.getboolean('Planner', 'verbose')
     planner_params.seed = config.getint('Planner', 'seed')
-    planner_params.max_edge_length = config.getfloat('Planner', 'max_edge_length')
+    planner_params.max_edge_length = config.getfloat(
+        'Planner', 'max_edge_length')
     planner_params.num_actions = config.getint('Planner', 'num_actions')
     planner_params.max_nodes = config.getfloat('Planner', 'max_nodes')
     planner_params.angle_weight = config.getfloat('Planner', 'angle_weight')
-    planner_params.distance_weight0 = config.getfloat('Planner', 'distance_weight0')
-    planner_params.distance_weight1 = config.getfloat('Planner', 'distance_weight1')
+    planner_params.distance_weight0 = config.getfloat(
+        'Planner', 'distance_weight0')
+    planner_params.distance_weight1 = config.getfloat(
+        'Planner', 'distance_weight1')
     planner_params.d_weight = config.getfloat('Planner', 'd_weight')
-    planner_params.occupancy_threshold = config.getfloat('Planner', 'occupancy_threshold')
+    planner_params.occupancy_threshold = config.getfloat(
+        'Planner', 'occupancy_threshold')
     planner_params.safe_distance = config.getfloat('Planner', 'safe_distance')
     planner_params.reg_out = config.getboolean('Planner', 'reg_out')
     algorithm = config.get('Planner', 'algorithm')
@@ -47,7 +52,8 @@ def read_planner_params(config):
     else:
         print(algorithm)
 
-    planner_params.dubins_control_model_enabled = config.getboolean('Planner', 'dubins_control_model_enabled')
+    planner_params.dubins_control_model_enabled = config.getboolean(
+        'Planner', 'dubins_control_model_enabled')
     if planner_params.dubins_control_model_enabled:
         planner_params.dubins_parameter = read_dubins_params(config)
     return planner_params
@@ -58,7 +64,8 @@ class EMExplorer(SS2D):
         super(EMExplorer, self).__init__(config_name, verbose)
 
         self._planner_params = read_planner_params(self._config)
-        self._planner = planner2d.EMPlanner2D(self._planner_params, self._sim.sensor_model, self._sim.control_model)
+        self._planner = planner2d.EMPlanner2D(
+            self._planner_params, self._sim.sensor_model, self._sim.control_model)
 
         if self.verbose:
             self._planner_params.pprint()
@@ -74,7 +81,8 @@ class EMExplorer(SS2D):
         return self._planner.rrt_planner(self._slam, self._virtual_map, goal_key, fron[0], fron[1]) == planner2d.EMPlanner2D.OptimizationResult.SUCCESS
 
     def line_plan(self, goal_key, fron):
-        actions =  self._planner.line_planner(self._slam, self._virtual_map, goal_key, fron[0], fron[1])
+        actions = self._planner.line_planner(
+            self._slam, self._virtual_map, goal_key, fron[0], fron[1])
         return actions
 
     def simulations_reward(self, actions):
@@ -110,19 +118,22 @@ class EMExplorer(SS2D):
 
     def plot(self, path=False):
         if path:
-            plot_path(self._planner, None, self._planner_params.dubins_control_model_enabled)
+            plot_path(self._planner, None,
+                      self._planner_params.dubins_control_model_enabled)
         super(EMExplorer, self).plot()
 
     def savefig(self, figname=None, path=False):
         if path:
-            plot_path(self._planner, None, self._planner_params.dubins_control_model_enabled)
+            plot_path(self._planner, None,
+                      self._planner_params.dubins_control_model_enabled)
         super(EMExplorer, self).savefig(figname)
 
     def save(self):
         landmarks = []
         for key, landmark in self._slam.map.iter_landmarks():
             cov = landmark.covariance
-            landmarks.append((key, landmark.point.x, landmark.point.y, cov[0, 0], cov[0, 1], cov[1, 0], cov[1, 1]))
+            landmarks.append((key, landmark.point.x, landmark.point.y,
+                             cov[0, 0], cov[0, 1], cov[1, 0], cov[1, 1]))
 
         trajectory = []
         for i, pose in enumerate(self._slam.map.iter_trajectory()):
@@ -132,16 +143,19 @@ class EMExplorer(SS2D):
 
         ground_truth_landmarks = []
         for key, landmark in self._sim.environment.iter_landmarks():
-            ground_truth_landmarks.append((key, landmark.point.x, landmark.point.y))
+            ground_truth_landmarks.append(
+                (key, landmark.point.x, landmark.point.y))
 
         ground_truth_trajectory = []
         for i, pose in enumerate(self._sim.environment.iter_trajectory()):
-            ground_truth_trajectory.append((pose.pose.x, pose.pose.y, pose.pose.theta))
+            ground_truth_trajectory.append(
+                (pose.pose.x, pose.pose.y, pose.pose.theta))
 
         virtual_landmarks = []
         for landmark in self._virtual_map.iter_virtual_landmarks():
             cov = landmark.covariance
-            virtual_landmarks.append((landmark.probability, cov[0, 0], cov[0, 1], cov[1, 0], cov[1, 1]))
+            virtual_landmarks.append(
+                (landmark.probability, cov[0, 0], cov[0, 1], cov[1, 0], cov[1, 1]))
 
         np.savez('step{}'.format(self.step),
                  landmarks=np.array(landmarks),
