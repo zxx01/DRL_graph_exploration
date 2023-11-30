@@ -36,15 +36,20 @@ class DeepQ(object):
         self.OBSERVE = 5e3  # 5e3
         self.EXPLORE = 1e6  # 5e5
         self.epoch = 1e4  # 1e4
+        self.exploration_fraction = 0.8
+
         if model_name == "GCN":
-            self.TARGET_UPDATE = 15000
+            self.TARGET_UPDATE = 15000  # update target_network period
         else:
-            self.TARGET_UPDATE = 9000
+            self.TARGET_UPDATE = 9000  # update target_network period
 
         # exploration and exploitation trad-off parameters
         # e-greedy trad-off
-        self.FINAL_EPSILON = 0  # final value of epsilon
+        # e-greedy scale down epsilon
+        self.FINAL_EPSILON = 0.01  # final value of epsilon
         self.INITIAL_EPSILON = 0.9
+        self.epsilon_schedule = self.LinearSchedule(
+            self.INITIAL_EPSILON, self.FINAL_EPSILON, int(self.EXPLORE * self.exploration_fraction))
         self.max_grad_norm = 0.5
 
         # setup environment parameters
@@ -58,6 +63,13 @@ class DeepQ(object):
         self.total_reward = np.empty([0, 0])
 
     def running(self, model, modelTarget, test=False):
+        """执行DQN的训练和测试
+
+        Args:
+            model (_type_): _description_
+            modelTarget (_type_): _description_
+            test (bool, optional): _description_. Defaults to False.
+        """
         data_all = pd.read_csv(self.reward_data_path + "reward_data.csv")
         temp_i = 0
         Test = test
@@ -75,11 +87,6 @@ class DeepQ(object):
             self.step_t += 1
             temp_i += 1
 
-            # e-greedy scale down epsilon
-            if self.epsilon > self.FINAL_EPSILON and self.step_t > self.OBSERVE:
-                self.epsilon -= (self.INITIAL_EPSILON -
-                                 self.FINAL_EPSILON) / self.EXPLORE
-
             # get the input data (X, A)
             adjacency, featrues, globals_features, fro_size = env.graph_matrix()
             node_size = adjacency.shape[0]
@@ -87,8 +94,14 @@ class DeepQ(object):
             s_t = self.data_process([adjacency, featrues])
 
             # get the output reward (Y)
+            # 每一个action(frontier)计算对应的reward，其他不用作actions的nodes的reward为0
             all_actions = env.actions_all_goals()
             rewards = env.rewards_all_goals(all_actions)
+
+            # e-greedy scale down epsilon
+            if self.step_t > self.OBSERVE:
+                self.epsilon = self.epsilon_schedule.value(
+                    self.step_t - self.OBSERVE)
 
             # choose an action
             if method == "e-greedy":
@@ -137,8 +150,8 @@ class DeepQ(object):
                 self.buffer.popleft()
 
             # training step
-            if self.step_t > self.OBSERVE:
-                # updata target network
+            if self.step_t > self.OBSERVE:  # buffer至少存了self.OBSERVE个数据再开始训练
+                # update target network, period: self.TARGET_UPDATE steps
                 if self.step_t % self.TARGET_UPDATE == 0:
                     target_net.load_state_dict(policy_net.state_dict())
 
@@ -146,6 +159,7 @@ class DeepQ(object):
                 minibatch = random.sample(self.buffer, self.BATCH)
 
                 # get the batch variables
+                # batch = ({s, a, r, s'})
                 s_j_batch = [d[0] for d in minibatch]
                 s_j1_batch = [d[3] for d in minibatch]
                 s_j_loader = DataLoader(s_j_batch, batch_size=self.BATCH)
@@ -162,15 +176,22 @@ class DeepQ(object):
                 a_batch = np.array([])
                 y_batch = np.array([])
                 start_p = 0
-                for i in range(0, len(minibatch)):
+
+                # collect ({s_j_batch, a_batch, y_batch})
+                for i, _ in enumerate(minibatch):
+                    # whether this episode is terminal
                     terminal = minibatch[i][4]
+                    # next state's action space size
                     action_space = minibatch[i][5]
+                    # current state's actions
                     act = minibatch[i][1]
                     a_batch = np.append(a_batch, act)
+                    # current state's node space size
                     node_space = len(act)
 
                     temp_y = np.zeros(node_space)
                     index = np.argmax(act)
+
                     # if terminal, only equals reward
                     if terminal:
                         temp_y[index] = r_batch[i]
@@ -179,6 +200,7 @@ class DeepQ(object):
                         temp_range = temp_range[-action_space:]
                         max_q = np.max(temp_range)
                         temp_y[index] = r_batch[i] + self.GAMMA * max_q
+
                     start_p += node_space
                     y_batch = np.append(y_batch, temp_y)
 
@@ -188,8 +210,7 @@ class DeepQ(object):
                 temp_loss_data.append([self.step_t, self.temp_loss])
 
             print("TIMESTEP", self.step_t, "/ STATE", state, "/ EPSILON", self.epsilon,
-                  "/ Q_MAX %e" % np.max(
-                      readout_t), "/ EXPLORED", env.status(), "/ REWARD", r_t,
+                  f"/ Q_MAX {np.max(readout_t)}", "/ EXPLORED", env.status(), "/ REWARD", r_t,
                   "/ Terminal", current_done, "\n")
 
             if done:
@@ -223,10 +244,21 @@ class DeepQ(object):
                    self.object_path + 'Model_Target.pt')
 
     def data_process(self, data):
+        """将原始数据处理成适用于图神经网络(Graph Neural Network, GNN)的格式
+
+        Args:
+            data (_type_): [邻接矩阵, 特征矩阵]
+            device (_type_): _description_
+
+        Returns:
+            _type_: torch_geometric.data.Data
+        """
         s_a, s_x = data
         edge_index = []
         edge_attr = []
         edge_set = set()
+
+        # 处理邻接矩阵，构造图神经网络的节点和边数据
         for a_i in range(np.shape(s_a)[0]):
             for a_j in range(np.shape(s_a)[1]):
                 if (a_i, a_j) in edge_set or (a_j, a_i) in edge_set \
@@ -239,9 +271,14 @@ class DeepQ(object):
                     edge_attr.append(s_a[a_j][a_i])
                 edge_set.add((a_i, a_j))
                 edge_set.add((a_j, a_i))
-        edge_index = torch.tensor(np.transpose(edge_index), dtype=torch.long)
-        x = torch.tensor(s_x, dtype=torch.float)
+
+        x = torch.tensor(s_x, dtype=torch.float)  # GNN vertices attributes
+        edge_index = torch.tensor(np.transpose(
+            edge_index), dtype=torch.long)  # GNN edges
+        # GNN edges attributes
         edge_attr = torch.tensor(edge_attr, dtype=torch.float)
+
+        # 创建图数据对象
         state = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
         return state
 
@@ -271,6 +308,16 @@ class DeepQ(object):
         data = data.to(device)
         pred = model(data, prob)
         return pred
+
+    class LinearSchedule(object):
+        def __init__(self, initial_value, final_value, total_steps):
+            self.initial_value = initial_value
+            self.final_value = final_value
+            self.total_steps = total_steps
+
+        def value(self, step):
+            fraction = min(float(step) / self.total_steps, 1.0)
+            return self.final_value - fraction * (self.final_value - self.initial_value)
 
 
 class A2C(object):
@@ -309,6 +356,13 @@ class A2C(object):
         self.total_reward = np.empty([0, 0])
 
     def running(self, actor, critic, test=False):
+        """执行A2C的训练和测试
+
+        Args:
+            actor (_type_): _description_
+            critic (_type_): _description_
+            test (bool, optional): _description_. Defaults to False.
+        """
         data_all = pd.read_csv(self.reward_data_path + "reward_data.csv")
         temp_i = 0
         Test = test
@@ -324,6 +378,7 @@ class A2C(object):
         while temp_i < self.epoch:
             self.step_t += 1
             temp_i += 1
+
             # get the input data (X, A)
             adjacency, featrues, globals_features, fro_size = env.graph_matrix()
             node_size = adjacency.shape[0]
@@ -333,6 +388,7 @@ class A2C(object):
             mask[-fro_size:] = 1
 
             # get the output reward (Y)
+            # 每一个action(frontier)计算对应的reward，其他不用作actions的nodes的reward为0
             all_actions = env.actions_all_goals()
             rewards = env.rewards_all_goals(all_actions)
 
@@ -341,6 +397,7 @@ class A2C(object):
                                   policy_net).view(-1).cpu().detach().numpy()
             val = self.test(s_t, b_t, mask, device, value_net).item()
 
+            # 以概率 readout_t 抽取 action
             action_index = np.random.choice(fro_size, 1, p=readout_t)[0]
             action_index = key_size + action_index
 
@@ -373,7 +430,7 @@ class A2C(object):
                 (s_t, a_t, r_t, s_t1, current_done, fro_size, val))
 
             # training step
-            if len(self.buffer) == self.nstep:
+            if len(self.buffer) == self.nstep:  # 存够self.nstep个数据才train一次
                 # get the batch variables
                 s_j_batch = [d[0] for d in self.buffer]
                 s_j1_batch = [d[3] for d in self.buffer]
@@ -383,24 +440,31 @@ class A2C(object):
                 r_batch = [d[2] for d in self.buffer]
                 value_j = [d[6] for d in self.buffer]
 
+                # 利用self.nstep个数据构建discount_rewards
                 discount_rewards = []
                 ret = last_value
                 for i in reversed(range(len(self.buffer))):
                     terminal = self.buffer[i][4]
-                    ret = r_batch[i] + self.GAMMA * ret * (1.0-terminal)
+                    ret = r_batch[i] + self.GAMMA * ret * (1.0 - terminal)
                     discount_rewards.append(ret)
                 discount_rewards = discount_rewards[::-1]
 
                 a_batch = np.array([])
                 y_adv_batch = np.array([])
                 mask_batch = np.array([])
-                for i in range(0, len(self.buffer)):
+
+                for i, _ in enumerate(self.buffer):
+                    # next state's action space size
                     action_space = self.buffer[i][5]
+                    # current state's actions
                     act = self.buffer[i][1]
                     a_batch = np.append(a_batch, act)
+                    # current state's node space size
                     node_space = len(act)
+                    # next state's action mask
                     temp_mask = np.zeros(node_space)
                     temp_mask[-action_space:] = 1
+
                     temp_y = np.zeros(node_space)
                     index = np.argmax(act)
                     # get policy loss
@@ -448,10 +512,21 @@ class A2C(object):
         torch.save(value_net.state_dict(), self.object_path + 'Model_Value.pt')
 
     def data_process(self, data, device):
+        """将原始数据处理成适用于图神经网络(Graph Neural Network, GNN)的格式
+
+        Args:
+            data (_type_): [邻接矩阵, 特征矩阵]
+            device (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         s_a, s_x = data
         edge_index = []
         edge_attr = []
         edge_set = set()
+
+        # 处理邻接矩阵，构造图神经网络的节点和边数据
         for a_i in range(np.shape(s_a)[0]):
             for a_j in range(np.shape(s_a)[1]):
                 if (a_i, a_j) in edge_set or (a_j, a_i) in edge_set \
@@ -464,6 +539,7 @@ class A2C(object):
                     edge_attr.append(s_a[a_j][a_i])
                 edge_set.add((a_i, a_j))
                 edge_set.add((a_j, a_i))
+
         edge_index = torch.tensor(np.transpose(edge_index), dtype=torch.long)
         x = torch.tensor(s_x, dtype=torch.float)
         edge_attr = torch.tensor(edge_attr, dtype=torch.float)
@@ -472,6 +548,17 @@ class A2C(object):
         return state, batch
 
     def policy_cost(self, prob, advantages, action, mask):
+        """计算 Actor-Critic 方法中策略网络(Actor)的损失
+
+        Args:
+            prob (_type_): _description_
+            advantages (_type_): _description_
+            action (_type_): _description_
+            mask (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         prob_flat = prob.view(-1)
         advantages_flat = advantages.view(-1)
         advantages_flat = torch.masked_select(
@@ -483,12 +570,29 @@ class A2C(object):
         return policy_loss
 
     def value_cost(self, pred, target):
+        """计算 Actor-Critic 方法中价值网络(Critic)的损失
+
+        Args:
+            pred (_type_): _description_
+            target (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         pred_flat = pred.view(-1).to(torch.float32)
         target_flat = target.view(-1).to(torch.float32)
         loss = F.mse_loss(pred_flat, target_flat)
         return loss
 
     def entropy_loss(self, prob):
+        """计算策略输出的熵损失
+
+        Args:
+            prob (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         prob_flat = prob.view(-1).detach().to(torch.float32)
         entro = -torch.mul(prob_flat.log(), prob_flat).sum() / self.nstep
         self.entro = entro.item()
@@ -496,13 +600,29 @@ class A2C(object):
 
     def train(self, data, action, mask, dis_reward, y_adv,
               device, modelA, modelC, optimizer):
+        """训练 Actor-Critic 方法中的策略网络(Actor)和价值网络(Critic)
+
+        Args:
+            data (_type_): _description_
+            action (_type_): _description_
+            mask (_type_): _description_
+            dis_reward (_type_): _description_
+            y_adv (_type_): _description_
+            device (_type_): _description_
+            modelA (_type_): _description_
+            modelC (_type_): _description_
+            optimizer (_type_): _description_
+        """
         modelA.train()
         modelC.train()
         data = data.to(device)
         mask = torch.tensor(mask, dtype=bool).to(device)
         optimizer.zero_grad()
+        # 模型前向传播
         actor_out = modelA(data, mask, batch=data.batch)
         critic_out = modelC(data, mask, batch=data.batch)
+
+        # 计算损失
         eps = 1e-35
         actor_out = actor_out + eps
         y_adv = torch.tensor(y_adv).to(device)

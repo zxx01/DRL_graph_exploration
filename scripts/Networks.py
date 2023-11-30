@@ -10,40 +10,64 @@ from torch_geometric.utils.repeat import repeat
 
 
 class GCN(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels, hidden_channels, num_layers):
         super(GCN, self).__init__()
-        self.conv1 = GCNConv(5, 1000, improved=True)
-        self.conv2 = GCNConv(1000, 1000, improved=True)
-        self.fully_con1 = torch.nn.Linear(1000, 1)
+        assert num_layers >= 1
+        self.covs = torch.nn.ModuleList()
+        self.covs.append(GCNConv(in_channels, hidden_channels, improved=True))
+        for _ in range(num_layers - 1):
+            self.covs.append(
+                GCNConv(hidden_channels, hidden_channels, improved=True))
+        self.fully_con1 = torch.nn.Linear(hidden_channels, 1)
+
+        # self.conv1 = GCNConv(in_channels, hidden_channels, improved=True)
+        # self.conv2 = GCNConv(hidden_channels, hidden_channels, improved=True)
 
     def forward(self, data, prob, batch=None):
         x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
-
-        x = self.conv1(x, edge_index, edge_weight=edge_weight)
-        x = F.relu(x)
-        x = self.conv2(x, edge_index, edge_weight=edge_weight)
-        x = F.relu(x)
+        for conv in self.covs:
+            x = F.relu(conv(x, edge_index, edge_weight=edge_weight))
+        # x = self.conv1(x, edge_index, edge_weight=edge_weight)
+        # x = F.relu(x)
+        # x = self.conv2(x, edge_index, edge_weight=edge_weight)
+        # x = F.relu(x)
         x = F.dropout(x, p=prob)
         x = self.fully_con1(x)
         return x
 
 
 class PolicyGCN(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels, hidden_channels, num_layers):
         super(PolicyGCN, self).__init__()
-        self.conv1 = GCNConv(5, 1000, improved=True)
-        self.conv2 = GCNConv(1000, 1000, improved=True)
-        self.fully_con1 = torch.nn.Linear(1000, 1)
+
+        assert num_layers >= 1
+        self.covs = torch.nn.ModuleList()
+        self.covs.append(GCNConv(in_channels, hidden_channels, improved=True))
+        for _ in range(num_layers - 1):
+            self.covs.append(
+                GCNConv(hidden_channels, hidden_channels, improved=True))
+        self.fully_con1 = torch.nn.Linear(hidden_channels, 1)
+
+        # self.conv1 = GCNConv(in_channels, hidden_channels, improved=True)
+        # self.conv2 = GCNConv(hidden_channels, hidden_channels, improved=True)
 
     def forward(self, data, mask, batch=None):
         x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
 
-        x = self.conv1(x, edge_index, edge_weight=edge_weight)
-        x = F.relu(x)
-        x = self.conv2(x, edge_index, edge_weight=edge_weight)
-        x = F.relu(x)
+        for conv in self.covs:
+            x = F.relu(conv(x, edge_index, edge_weight=edge_weight))
+
         x = F.dropout(x)
         x = self.fully_con1(x)
+
+        # x = self.conv1(x, edge_index, edge_weight=edge_weight)
+        # x = F.relu(x)
+        # x = self.conv2(x, edge_index, edge_weight=edge_weight)
+        # x = F.relu(x)
+        # x = F.dropout(x)
+        # x = self.fully_con1(x)
+
+        # 只保留actions(frontiers)部分
         x = torch.masked_select(x.view(-1), mask)
         batch = torch.masked_select(batch, mask)
         x = softmax(x, batch)
@@ -51,19 +75,28 @@ class PolicyGCN(torch.nn.Module):
 
 
 class ValueGCN(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels, hidden_channels, num_layers):
         super(ValueGCN, self).__init__()
-        self.conv1 = GCNConv(5, 1000, improved=True)
-        self.conv2 = GCNConv(1000, 1000, improved=True)
-        self.fully_con1 = torch.nn.Linear(1000, 100)
+
+        assert num_layers >= 1
+        self.covs = torch.nn.ModuleList()
+        self.covs.append(GCNConv(in_channels, hidden_channels, improved=True))
+        for _ in range(num_layers - 1):
+            self.covs.append(
+                GCNConv(hidden_channels, hidden_channels, improved=True))
+        self.fully_con1 = torch.nn.Linear(hidden_channels, 100)
+
+        # self.conv1 = GCNConv(in_channels, hidden_channels, improved=True)
+        # self.conv2 = GCNConv(hidden_channels, hidden_channels, improved=True)
 
     def forward(self, data, mask, batch=None):
         x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
-
-        x = self.conv1(x, edge_index, edge_weight=edge_weight)
-        x = F.relu(x)
-        x = self.conv2(x, edge_index, edge_weight=edge_weight)
-        x = F.relu(x)
+        for conv in self.covs:
+            x = F.relu(conv(x, edge_index, edge_weight=edge_weight))
+        # x = self.conv1(x, edge_index, edge_weight=edge_weight)
+        # x = F.relu(x)
+        # x = self.conv2(x, edge_index, edge_weight=edge_weight)
+        # x = F.relu(x)
         x = F.dropout(x)
         x = self.fully_con1(x)
         x = global_mean_pool(x, batch).mean(dim=1)
@@ -71,10 +104,10 @@ class ValueGCN(torch.nn.Module):
 
 
 class GGNN(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, hidden_channels, num_layers):
         super(GGNN, self).__init__()
-        self.gconv1 = GatedGraphConv(1000, 3)
-        self.fully_con1 = torch.nn.Linear(1000, 1)
+        self.gconv1 = GatedGraphConv(hidden_channels, num_layers)
+        self.fully_con1 = torch.nn.Linear(hidden_channels, 1)
 
     def forward(self, data, prob, batch=None):
         x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
@@ -87,10 +120,10 @@ class GGNN(torch.nn.Module):
 
 
 class PolicyGGNN(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, hidden_channels, num_layers):
         super(PolicyGGNN, self).__init__()
-        self.gconv1 = GatedGraphConv(1000, 3)
-        self.fully_con1 = torch.nn.Linear(1000, 1)
+        self.gconv1 = GatedGraphConv(hidden_channels, num_layers)
+        self.fully_con1 = torch.nn.Linear(hidden_channels, 1)
 
     def forward(self, data, mask, batch=None):
         x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
@@ -106,10 +139,10 @@ class PolicyGGNN(torch.nn.Module):
 
 
 class ValueGGNN(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, hidden_channels, num_layers):
         super(ValueGGNN, self).__init__()
-        self.gconv1 = GatedGraphConv(1000, 3)
-        self.fully_con1 = torch.nn.Linear(1000, 100)
+        self.gconv1 = GatedGraphConv(hidden_channels, num_layers)
+        self.fully_con1 = torch.nn.Linear(hidden_channels, 100)
 
     def forward(self, data, mask, batch=None):
         x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr

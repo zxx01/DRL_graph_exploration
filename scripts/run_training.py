@@ -24,16 +24,16 @@ if training_method == "DQN":
     check_point_t = torch.load(target_model_name)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if model_name == "GCN":
-        model = Networks.GCN()
-        modelt = Networks.GCN()
+        model = Networks.GCN(5, 1000, 2)
+        modelt = Networks.GCN(5, 1000, 2)
     elif model_name == "g-U-Net":
         model = Networks.GraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
         modelt = Networks.GraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
-        model = Networks.GGNN()
-        modelt = Networks.GGNN()
+        model = Networks.GGNN(1000, 3)
+        modelt = Networks.GGNN(1000, 3)
     model.load_state_dict(check_point_p)
     modelt.load_state_dict(check_point_t)
     model.to(device)
@@ -48,16 +48,16 @@ elif training_method == "A2C":
     check_point_v = torch.load(value_model_name)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if model_name == "GCN":
-        modela = Networks.PolicyGCN()
-        modelc = Networks.ValueGCN()
+        modela = Networks.PolicyGCN(5, 1000, 2)
+        modelc = Networks.ValueGCN(5, 1000, 2)
     elif model_name == "g-U-Net":
         modela = Networks.PolicyGraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
         modelc = Networks.ValueGraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
-        modela = Networks.PolicyGGNN()
-        modelc = Networks.ValueGGNN()
+        modela = Networks.PolicyGGNN(1000, 3)
+        modelc = Networks.ValueGGNN(1000, 3)
     modela.load_state_dict(check_point_p)
     modelc.load_state_dict(check_point_v)
     modela.to(device)

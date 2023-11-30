@@ -10,7 +10,7 @@ from policy import DeepQ, A2C
 
 # setup the training model and method
 training_method = "DQN"  # DQN, A2C
-model_name = "g-U-Net"  # GCN, GG-NN, g-U-Net
+model_name = "GG-NN"  # GCN, GG-NN, g-U-Net
 
 # setup local file paths
 case_path = training_method + "_" + model_name + "/"
@@ -39,16 +39,16 @@ if training_method == "DQN":
     target_model_name = object_path + 'Model_Target.pt'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if model_name == "GCN":
-        model = Networks.GCN()
-        modelt = Networks.GCN()
+        model = Networks.GCN(5, 1000, 2)
+        modelt = Networks.GCN(5, 1000, 2)
     elif model_name == "g-U-Net":
         model = Networks.GraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
         modelt = Networks.GraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
-        model = Networks.GGNN()
-        modelt = Networks.GGNN()
+        model = Networks.GGNN(1000, 3)
+        modelt = Networks.GGNN(1000, 3)
     model.to(device)
     modelt.to(device)
     torch.save(model.state_dict(), policy_model_name)
@@ -68,16 +68,16 @@ elif training_method == "A2C":
     value_model_name = object_path + 'Model_Value.pt'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if model_name == "GCN":
-        modela = Networks.PolicyGCN()
-        modelc = Networks.ValueGCN()
+        modela = Networks.PolicyGCN(5, 1000, 2)
+        modelc = Networks.ValueGCN(5, 1000, 2)
     elif model_name == "g-U-Net":
         modela = Networks.PolicyGraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
         modelc = Networks.ValueGraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
-        modela = Networks.PolicyGGNN()
-        modelc = Networks.ValueGGNN()
+        modela = Networks.PolicyGGNN(1000, 3)
+        modelc = Networks.ValueGGNN(1000, 3)
     modela.to(device)
     modelc.to(device)
     torch.save(modela.state_dict(), policy_model_name)
