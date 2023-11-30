@@ -50,6 +50,7 @@ class DeepQ(object):
         self.INITIAL_EPSILON = 0.9
         self.epsilon_schedule = self.LinearSchedule(
             self.INITIAL_EPSILON, self.FINAL_EPSILON, int(self.EXPLORE * self.exploration_fraction))
+        self.explore_method = "bayesian"  # bayesian, e-greedy
         self.max_grad_norm = 0.5
 
         # setup environment parameters
@@ -73,7 +74,6 @@ class DeepQ(object):
         data_all = pd.read_csv(self.reward_data_path + "reward_data.csv")
         temp_i = 0
         Test = test
-        method = "bayesian"  # bayesian, e-greedy
         env = robot.ExplorationEnv(self.map_size, 0, Test)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         policy_net = model
@@ -104,7 +104,7 @@ class DeepQ(object):
                     self.step_t - self.OBSERVE)
 
             # choose an action
-            if method == "e-greedy":
+            if self.explore_method == "e-greedy":
                 readout_t = self.test(
                     s_t, 0.0, device, policy_net).cpu().detach().numpy()
                 a_t = np.zeros([node_size])
@@ -118,7 +118,7 @@ class DeepQ(object):
                     state = "exploit"
                     action_index = np.argmax(readout_t[-fro_size:])
                     a_t[key_size + action_index] = 1
-            elif method == "bayesian":
+            elif self.explore_method == "bayesian":
                 readout_t = self.test(
                     s_t, self.epsilon, device, policy_net).cpu().detach().numpy()
                 state = "bayesian"
@@ -310,6 +310,12 @@ class DeepQ(object):
         return pred
 
     class LinearSchedule(object):
+        """线性衰减调度器
+
+        Args:
+            object (_type_): _description_
+        """
+
         def __init__(self, initial_value, final_value, total_steps):
             self.initial_value = initial_value
             self.final_value = final_value
