@@ -162,7 +162,8 @@ class DeepQ(object):
                 a_batch = np.array([])
                 y_batch = np.array([])
                 start_p = 0
-                for i in range(0, len(minibatch)):
+                for i, _ in enumerate(minibatch):
+                    # for i in range(0, len(minibatch)):
                     terminal = minibatch[i][4]
                     action_space = minibatch[i][5]
                     act = minibatch[i][1]
@@ -394,7 +395,8 @@ class A2C(object):
                 a_batch = np.array([])
                 y_adv_batch = np.array([])
                 mask_batch = np.array([])
-                for i in range(0, len(self.buffer)):
+                for i, _ in enumerate(self.buffer):
+                    # for i in range(0, len(self.buffer)):
                     action_space = self.buffer[i][5]
                     act = self.buffer[i][1]
                     a_batch = np.append(a_batch, act)
