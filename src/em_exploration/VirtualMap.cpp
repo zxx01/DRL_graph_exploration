@@ -65,6 +65,12 @@ namespace em_exploration
     return (double)count / count_explored_;
   }
 
+  /**
+   * @brief 根据 SLAM 系统和传感器模型更新虚拟地图中每个虚拟地标的Probability。
+   *
+   * @param slam
+   * @param sensor_model
+   */
   void VirtualMap::updateProbability(const SLAM2D &slam, const BearingRangeSensorModel &sensor_model)
   {
     //  std::vector<std::shared_ptr<Map>> maps0 = sampleMap(slam);
@@ -83,6 +89,8 @@ namespace em_exploration
     parameter.setResolution(parameter_.getResolution());
 
     OccupancyMap occupancy_map(parameter);
+
+    // 综合多个maps来更新probability
     for (const std::shared_ptr<Map> &map : maps)
     {
       occupancy_map.update(*map, sensor_model);
@@ -287,6 +295,12 @@ namespace em_exploration
     }
   }
 
+  /**
+   * @brief 更新虚拟地图中每个虚拟地标的信息矩阵
+   *
+   * @param map
+   * @param sensor_model
+   */
   void VirtualMap::updateInformation(const Map &map, const BearingRangeSensorModel &sensor_model)
   {
     for (auto &it : virtual_landmarks_)

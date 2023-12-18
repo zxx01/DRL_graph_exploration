@@ -378,9 +378,16 @@ namespace em_exploration
 		return uncertainty;
 	}
 
+	/**
+	 * @brief 计算虚拟地图 virtual_map 中的不确定性
+	 *
+	 * @param virtual_map
+	 * @return double
+	 */
 	double EMPlanner2D::calculateUncertainty(const VirtualMap &virtual_map)
 	{
 		double uncertainty = 0.0;
+		// 将每个地标的协方差矩阵迹累加到总不确定性上。
 		for (auto it = virtual_map.cbeginVirtualLandmark();
 				 it != virtual_map.cendVirtualLandnmark(); ++it)
 		{
@@ -391,6 +398,14 @@ namespace em_exploration
 		return uncertainty;
 	}
 
+	/**
+	 * @brief 计算基于给定虚拟地图 virtual_map、距离 distance 和参数 parameter 的效用（utility）
+	 *
+	 * @param virtual_map
+	 * @param distance
+	 * @param parameter
+	 * @return double
+	 */
 	double EMPlanner2D::calculateUtility(const VirtualMap &virtual_map, double distance, const Parameter &parameter)
 	{
 		int vl_known = 0;
@@ -398,8 +413,8 @@ namespace em_exploration
 			if (it->probability < parameter.occupancy_threshold)
 				vl_known++;
 
+		// 动态 distance_weight
 		double percentage_known = (double)vl_known / virtual_map.getVirtualLandmarkSize();
-
 		double distance_weight = parameter.distance_weight0 - (parameter.distance_weight0 - parameter.distance_weight1) * percentage_known;
 
 		return EMPlanner2D::calculateUncertainty(virtual_map) + distance * distance_weight;
@@ -1554,7 +1569,17 @@ namespace em_exploration
 			std::cout << "  Done. Library size: " << dubins_library_.size() << std::endl;
 	}
 
-	double EMPlanner2D::simulations_reward(const SLAM2D &slam, const VirtualMap &virtual_map, const Simulator2D &sim, std::vector<Pose2> actions)
+	/**
+	 * @brief 在机器人规划领域中模拟一系列动作，并基于这些动作在模拟、SLAM（同时定位与地图构建）、以及虚拟地图系统处理的结果来评估奖励（或效用）
+	 *
+	 * @param slam
+	 * @param virtual_map
+	 * @param sim
+	 * @param actions
+	 * @return double
+	 */
+	double EMPlanner2D::simulations_reward(const SLAM2D &slam, const VirtualMap &virtual_map,
+																				 const Simulator2D &sim, std::vector<Pose2> actions)
 	{
 		std::shared_ptr<SLAM2D> temp_slam(new SLAM2D(slam));
 		temp_slam->set_copy_isam();
@@ -1568,8 +1593,11 @@ namespace em_exploration
 		double initial_u;
 		double final_u;
 		double reward;
+
+		// 当前state的utility
 		initial_u = EMPlanner2D::calculateUtility(*temp_virtual_map, 0, parameter_);
 
+		// 对于 actions 中的每个action执行相应的仿真模拟
 		int actions_size = int(actions.size());
 		for (int i = 0; i < actions_size; i++)
 		{
@@ -1603,6 +1631,8 @@ namespace em_exploration
 			temp_virtual_map->updateInformation(temp_slam->getMap(), temp_sim->getSensorModel());
 		}
 
+
+		// 执行所有动作后，它计算最终的效用，并将奖励计算为初始效用和最终效用之间的差值
 		//    get reward of the current actions
 		final_u = EMPlanner2D::calculateUtility(*temp_virtual_map, dist, parameter_);
 		reward = initial_u - final_u;

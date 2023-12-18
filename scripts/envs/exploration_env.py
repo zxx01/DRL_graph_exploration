@@ -231,6 +231,11 @@ class ExplorationEnv(gym.Env):
         self._sim._slam.print_graph()
 
     def max_uncertainty_of_trajectory(self):
+        """获取不确定性最大的轨迹节点
+
+        Returns:
+            _type_: _description_
+        """
         land_size = self.get_landmark_size()
         self._sim._slam.adjacency_degree_get()
         features = np.array(self._sim._slam.features_out())

@@ -14,7 +14,7 @@ TEST = True
 PLOT = True  # save testing date if False; only visualize the environment if True
 
 # setup the training model and method
-training_method = "A2C"  # DQN, A2C
+training_method = "DQN"  # DQN, A2C
 model_name = "GG-NN"  # GCN, GG-NN, g-U-Net
 
 case_path = training_method + "_" + model_name + "/"

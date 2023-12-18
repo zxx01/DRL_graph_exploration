@@ -10,7 +10,7 @@ from policy import DeepQ, A2C
 
 # setup the training model and method
 training_method = "DQN"  # DQN, A2C
-model_name = "GG-NN"  # GCN, GG-NN, g-U-Net
+model_name = "GCN"  # GCN, GG-NN, g-U-Net
 
 # setup local file paths
 case_path = training_method + "_" + model_name + "/"
