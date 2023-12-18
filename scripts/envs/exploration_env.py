@@ -1,10 +1,10 @@
-import matplotlib as mpl
 import sys
+import gc
 import os
 import math
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-import gc
 import gym
 from gym import error, spaces
 from gym.utils import seeding
@@ -17,7 +17,7 @@ try:
     from envs.utils import load_config, plot_virtual_map, plot_virtual_map_cov, plot_path
 except ImportError as e:
     raise error.DependencyNotInstalled(
-        '{}. Build em_exploration and export PYTHONPATH=build_dir'.format(e))
+        f'{e}. Build em_exploration and export PYTHONPATH=build_dir')
 
 
 class ExplorationEnv(gym.Env):
@@ -50,7 +50,8 @@ class ExplorationEnv(gym.Env):
                                       t])
                             for t in self._rotation_set]
         self.action_space = spaces.Discrete(n=num_actions)
-        assert (len(self._action_set) == num_actions)
+        assert len(self._action_set) == num_actions
+
         self._done = False
         self.loop_clo = False
         self._frontier = []
@@ -99,6 +100,14 @@ class ExplorationEnv(gym.Env):
         return self._sim.calculate_utility(distance)
 
     def step(self, action):
+        """在一个模拟环境中执行一个动作，并返回该动作的结果
+
+        Args:
+            action (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         if self._sim._planner_params.reg_out:
             action = self._action_set[action]
         u1 = self._get_utility()
@@ -136,6 +145,11 @@ class ExplorationEnv(gym.Env):
         return actions
 
     def actions_all_goals(self):
+        """为每个目标(frontiers)生成actions
+
+        Returns:
+            _type_: _description_
+        """
         key_size = self._sim._slam.key_size()
         land_size = self.get_landmark_size()
         fro_size = len(self._frontier)
@@ -147,6 +161,14 @@ class ExplorationEnv(gym.Env):
         return all_actions
 
     def rewards_all_goals(self, all_actions):
+        """为每个目标(frontiers)的actions计算rewards
+
+        Args:
+            all_actions (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         key_size = self._sim._slam.key_size()
         land_size = self.get_landmark_size()
         fro_size = len(self._frontier)
@@ -154,17 +176,18 @@ class ExplorationEnv(gym.Env):
 
         # calculating rewards for each actions
         for i, _ in enumerate(self._frontier):
-            rewards[i +
-                    key_size] = self._sim.simulations_reward(all_actions[i + key_size])
+            rewards[i + key_size] = self._sim.simulations_reward(
+                all_actions[i + key_size])
         act_max = np.nanargmax(rewards)
-        if self.is_nf(act_max):
+
+        if self.is_nf(act_max):  # rewards 最大的 action(frontier) 就是 current pose 所连接的frontier
             self.loop_clo = False
             rewards = np.interp(
-                rewards, (np.nanmin(rewards), np.nanmax(rewards)), (-1.0, 0.0))
-        else:
+                rewards, (np.nanmin(rewards), np.nanmax(rewards)), (-1.0, 0.0))  # 限制rewards范围(-1.0, 0.0)
+        else:  # rewards 最大的 action(frontier) 不是 current pose 所连接的frontier
             self.loop_clo = True
             rewards = np.interp(
-                rewards, (np.nanmin(rewards), np.nanmax(rewards)), (-1.0, 1.0))
+                rewards, (np.nanmin(rewards), np.nanmax(rewards)), (-1.0, 1.0))  # 限制rewards范围(-1.0, 1.0)
         rewards[np.isnan(rewards)] = 0
         return rewards
 
@@ -189,9 +212,19 @@ class ExplorationEnv(gym.Env):
         return self.dist
 
     def get_landmark_size(self):
+        """获取landmarks的数量
+
+        Returns:
+            _type_: _description_
+        """
         return self._sim._slam.map.get_landmark_size()
 
     def get_key_size(self):
+        """获取key_nodes的数量, 包括历史pose和landmarks的数量
+
+        Returns:
+            _type_: _description_
+        """
         return self._sim._slam.key_size()
 
     def print_graph(self):
@@ -204,6 +237,12 @@ class ExplorationEnv(gym.Env):
         return np.amax(features[land_size:])
 
     def graph_matrix(self):
+        """构建图神经网络所需的邻接矩阵和特征矩阵
+
+        Returns:
+            _type_: _description_
+        """
+        # 1.初始化准备数据
         self.frontier()
         trace_map = self._sim._virtual_map.to_cov_trace()
         key_size = self._sim._slam.key_size()
@@ -220,29 +259,32 @@ class ExplorationEnv(gym.Env):
         robot_location = [self._sim.vehicle_position.x,
                           self._sim.vehicle_position.y]
 
+        # 2.构建邻接矩阵
         # add frontiers to adjacency matrix
+        # 邻接矩阵的排布:[landmarks + history pose, current pose, frontiers]
         for i in range(fro_size):
             frontier_point = self._frontier[i]
             for j in range(len(self._frontier_index[i])):
                 index_node = self._frontier_index[i][j]
-                if index_node == 0:
-                    self.nearest_frontier_point = i+key_size
+                if index_node == 0:  # node_id 是当前的机器人位置点
+                    self.nearest_frontier_point = i + key_size  # 确定 current pose 连接的frontier
                     dist = self.points2dist(frontier_point, robot_location)
                     adjacency[key_size - 1][i + key_size] = dist
                     adjacency[i + key_size][key_size - 1] = dist
-                else:
+                else:  # node_id 是其他节点
                     dist = self.points2dist(
                         frontier_point, self._sim._slam.get_key_points(index_node - 1))
                     adjacency[index_node - 1][i + key_size] = dist
                     adjacency[i + key_size][index_node - 1] = dist
 
+        # 3.构建特征矩阵
         # add frontiers to features matrix col 1: trace of cov
         for i in range(fro_size):
             indx = self.coor2index(self._frontier[i][0], self._frontier[i][1])
             f = trace_map[indx[0]][indx[1]]
             features[key_size + i][0] = f
 
-        # add frontiers to features matrix col 2: distance to the robot
+        # add frontiers to features matrix col 2: key_point‘s and frontiers' distance to the robot
         features_2 = np.zeros(np.shape(features))
         for i in range(key_size):
             key_point = self._sim._slam.get_key_points(i)
@@ -281,14 +323,16 @@ class ExplorationEnv(gym.Env):
         # add frontiers to features matrix clo 4: index of locations
         features_4 = np.zeros(np.shape(features))
         for i in range(key_size - 1):
-            features_4[i][0] = -1
-        features_4[key_size - 1][0] = 0
+            features_4[i][0] = -1  # 过去的 pose 和所有的 landmarks
+        features_4[key_size - 1][0] = 0  # 机器人当前位置
         for i in range(fro_size):
-            features_4[key_size + i][0] = 1
+            features_4[key_size + i][0] = 1  # 所有的frontiers
 
+        # features.size  = (node.num, 5)
         features = np.concatenate(
             (features, features_2, features_5, features_3, features_4), axis=1)
 
+        # 创建全局特征(当前state的不确定性是通过所有虚拟地标的协方差的迹来量化的)
         # create global features
         avg_landmarks_error = np.mean(features[1:land_size + 1][:, 0])
         global_features = np.array([avg_landmarks_error])
@@ -301,9 +345,13 @@ class ExplorationEnv(gym.Env):
             return False
 
     def frontier(self):
+        """在一个环境中识别前沿点
+        """
+        # 1.获取当前位置
         vehicle_location = [self._sim.vehicle_position.x,
                             self._sim.vehicle_position.y]
 
+        # 2.识别free区域
         a = self._obs < 0.45
         free_index_i, free_index_j = np.nonzero(a)
 
@@ -314,13 +362,13 @@ class ExplorationEnv(gym.Env):
         self._frontier = []
         self._frontier_index = []
 
+        # 3.提取landmarks和frontiers
         # extract landmarks
         for land_key in landmark_keys:
             points = list(self._sim._slam.get_key_points(land_key))
             all_landmarks.append(points)
 
-        # for ptr, id in enumerate(free_index_i):
-        for ptr in range(len(free_index_i)):
+        for ptr, _ in enumerate(free_index_i):
             cur_i = free_index_i[ptr]
             cur_j = free_index_j[ptr]
             count = 0
@@ -345,11 +393,13 @@ class ExplorationEnv(gym.Env):
                         1] <= self._sim._map_params.max_y - self.ext:
                     all_frontiers.append(ind2co)
 
+        # 4.寻找距离当前位置最近的frontier
         cur_fro = all_frontiers[self.nearest_frontier(
             vehicle_location, all_frontiers)]
-        self._frontier.append(cur_fro)
-        self._frontier_index.append([0])
+        self._frontier.append(cur_fro)  # frontier 的 id
+        self._frontier_index.append([0])  # 连接 frontier 的 node 的 id
 
+        # 5.寻找距离每个landmark最近的frontier
         if not self._one_nearest_frontier:
             for ip, p in enumerate(all_landmarks):
                 cur_fro = all_frontiers[self.nearest_frontier(
@@ -361,6 +411,7 @@ class ExplorationEnv(gym.Env):
                     self._frontier.append(cur_fro)
                     self._frontier_index.append([ip + 1])
 
+        # 处理重复的frontier
         not_go = []
         for i, vi in enumerate(self._frontier):
             temp_list = []
@@ -372,6 +423,15 @@ class ExplorationEnv(gym.Env):
             self._frontier_index.append(temp_list)
 
     def nearest_frontier(self, point, all_frontiers):
+        """寻找距离point最近的frontier的index.
+
+        Args:
+            point (_type_): _description_
+            all_frontiers (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         min_dist = float("Inf")
         min_index = None
         for index, fro_points in enumerate(all_frontiers):
@@ -388,6 +448,15 @@ class ExplorationEnv(gym.Env):
             self._frontier)[1][index], 'ro')
 
     def index2coor(self, matrix_i, matrix_j):
+        """栅格地图下标->坐标
+
+        Args:
+            matrix_i (_type_): _description_
+            matrix_j (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         x = (matrix_j + 0.5) * self.map_resolution + \
             self._sim._map_params.min_x
         y = (matrix_i + 0.5) * self.map_resolution + \
@@ -395,6 +464,15 @@ class ExplorationEnv(gym.Env):
         return [x, y]
 
     def coor2index(self, x, y):
+        """坐标->栅格地图下标
+
+        Args:
+            x (_type_): _description_
+            y (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         map_j = int(round((x - self._sim._map_params.min_x) /
                     self.map_resolution - 0.5))
         map_i = int(round((y - self._sim._map_params.min_y) /
@@ -402,11 +480,30 @@ class ExplorationEnv(gym.Env):
         return [map_i, map_j]
 
     def points2dist(self, point1, point2):
+        """计算两点之间距离
+
+        Args:
+            point1 (_type_): _description_
+            point2 (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         dist = np.sqrt((point1[0] - point2[0]) ** 2 +
                        (point1[1] - point2[1]) ** 2)
         return dist
 
     def diff_theta(self, point1, point2, root_theta):
+        """计算由point2指向point1的射线的角度和root_theta之间的角度差
+
+        Args:
+            point1 (_type_): _description_
+            point2 (_type_): _description_
+            root_theta (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         goal_theta = math.atan2(point1[1] - point2[1], point1[0] - point2[0])
         if goal_theta < 0:
             goal_theta = math.pi * 2 + goal_theta
