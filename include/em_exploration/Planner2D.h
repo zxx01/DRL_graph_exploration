@@ -72,9 +72,14 @@ namespace em_exploration
       /// w = w0 - (w0 - w1) * exploration_percentage
       double distance_weight0; /// weight0 of distance in cost function
       double distance_weight1; /// weight1 of distance in cost function
-      double d_weight;         /// decrease of weight if no solution is found (to perform another optimization)
-      double max_nodes;        /// maximum nodes in RRT
-      double max_edge_length;  /// maximum extension distance
+      double delta_angle_weight;
+      double entropy_weight;
+      double uncertainty_weight;
+      double occupancy_weight;
+      double trajectory;
+      double d_weight;        /// decrease of weight if no solution is found (to perform another optimization)
+      double max_nodes;       /// maximum nodes in RRT
+      double max_edge_length; /// maximum extension distance
       int num_actions;
       double occupancy_threshold; /// occupancy probability to be considered as free
       double safe_distance;       /// safe distance
@@ -329,7 +334,9 @@ namespace em_exploration
     double costFunction(Node::shared_ptr node) const;
 
     static double calculateUncertainty(const VirtualMap &virtual_map);
-    static double calculateUtility(const VirtualMap &virtual_map, double distance, const Parameter &parameter);
+    // static double calculateUtility(const VirtualMap &virtual_map, double distance, const Parameter &parameter);
+    static double calculateUtility(const VirtualMap &virtual_map, const double &distance, const double &delta_angle,
+                                   const Parameter &parameter, const double &trajectory = 0.0, const double &entropy = 0.0);
 
     void updateTrajectory_EM(Node::shared_ptr leaf);
 

@@ -29,6 +29,15 @@ def read_planner_params(config):
         'Planner', 'max_edge_length')
     planner_params.num_actions = config.getint('Planner', 'num_actions')
     planner_params.max_nodes = config.getfloat('Planner', 'max_nodes')
+    planner_params.uncertainty_weight = config.getfloat(
+        'Planner', 'uncertainty_weight')
+    planner_params.occupancy_weight = config.getfloat(
+        'Planner', 'occupancy_weight')
+    planner_params.delta_angle_weight = config.getfloat(
+        'Planner', 'delta_angle_weight')
+    planner_params.entropy_weight = config.getfloat(
+        'Planner', 'entropy_weight')
+    planner_params.trajectory = config.getfloat('Planner', 'trajectory')
     planner_params.angle_weight = config.getfloat('Planner', 'angle_weight')
     planner_params.distance_weight0 = config.getfloat(
         'Planner', 'distance_weight0')
@@ -71,8 +80,8 @@ class EMExplorer(SS2D):
             self._planner_params.pprint()
         self.save_history = save_history
 
-    def calculate_utility(self, distance):
-        return planner2d.EMPlanner2D.calculate_utility(self._virtual_map, distance, self._planner_params)
+    def calculate_utility(self, distance, delta_angle, trajectory_uncertainty):
+        return planner2d.EMPlanner2D.calculate_utility(self._virtual_map, distance, delta_angle, self._planner_params, trajectory_uncertainty, 0.0)
 
     def plan(self):
         return self._planner.optimize2(self._slam, self._virtual_map) == planner2d.EMPlanner2D.OptimizationResult.SUCCESS

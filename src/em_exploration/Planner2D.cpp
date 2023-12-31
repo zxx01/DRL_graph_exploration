@@ -2,6 +2,8 @@
 #include <ctime>
 #include <pyport.h>
 
+#define DEBUG
+
 #define LEAFONLY
 #define USE_FAST_MARGINAL2
 
@@ -387,12 +389,14 @@ namespace em_exploration
 	double EMPlanner2D::calculateUncertainty(const VirtualMap &virtual_map)
 	{
 		double uncertainty = 0.0;
+		int cnt = 0;
 		// 将每个地标的协方差矩阵迹累加到总不确定性上。
 		for (auto it = virtual_map.cbeginVirtualLandmark();
 				 it != virtual_map.cendVirtualLandnmark(); ++it)
 		{
 			//	 if (it->probability > 0.49) {
 			uncertainty += 1.0 * it->covariance().trace();
+			cnt++;
 			//	 }
 		}
 		return uncertainty;
@@ -406,18 +410,72 @@ namespace em_exploration
 	 * @param parameter
 	 * @return double
 	 */
-	double EMPlanner2D::calculateUtility(const VirtualMap &virtual_map, double distance, const Parameter &parameter)
+	// double EMPlanner2D::calculateUtility(const VirtualMap &virtual_map, double distance, const Parameter &parameter)
+	// {
+	// 	int vl_known = 0;
+	// 	for (auto it = virtual_map.cbeginVirtualLandmark(); it != virtual_map.cendVirtualLandnmark(); ++it)
+	// 		if (it->probability < parameter.occupancy_threshold)
+	// 			vl_known++;
+	// 	// 动态 distance_weight
+	// 	double percentage_known = (double)vl_known / virtual_map.getVirtualLandmarkSize();
+	// 	double distance_weight = parameter.distance_weight0 - (parameter.distance_weight0 - parameter.distance_weight1) * percentage_known; // w = w0 - (w0 - w1) * exploration_percentage
+	// 	return EMPlanner2D::calculateUncertainty(virtual_map) + distance * distance_weight;
+	// }
+
+	/**
+	 * @brief 计算给定参数时的utility
+	 *
+	 * @param virtual_map
+	 * @param distance
+	 * @param delta_angle
+	 * @param trajectory
+	 * @param entropy
+	 * @param parameter
+	 * @return double
+	 */
+	double EMPlanner2D::calculateUtility(const VirtualMap &virtual_map, const double &distance, const double &delta_angle,
+																			 const Parameter &parameter, const double &trajectory, const double &entropy)
 	{
 		int vl_known = 0;
 		for (auto it = virtual_map.cbeginVirtualLandmark(); it != virtual_map.cendVirtualLandnmark(); ++it)
 			if (it->probability < parameter.occupancy_threshold)
 				vl_known++;
 
-		// 动态 distance_weight
 		double percentage_known = (double)vl_known / virtual_map.getVirtualLandmarkSize();
-		double distance_weight = parameter.distance_weight0 - (parameter.distance_weight0 - parameter.distance_weight1) * percentage_known;
+		// double distance_weight = parameter.distance_weight0 - (parameter.distance_weight0 - parameter.distance_weight1) * percentage_known; // w = w0 - (w0 - w1) * exploration_percentage
 
-		return EMPlanner2D::calculateUncertainty(virtual_map) + distance * distance_weight;
+		double distance_weight = parameter.distance_weight0;
+		double angle_weight = parameter.angle_weight;
+		double trajectory_weight = parameter.trajectory;
+		double uncertainty_weight = parameter.uncertainty_weight;
+		double occupancy_weight = parameter.occupancy_weight;
+		double entropy_weight = parameter.entropy_weight;
+
+#ifndef DEBUG
+		std::cout << "  uncertainty: " << EMPlanner2D::calculateUncertainty(virtual_map) << std::endl;
+		std::cout << "  distance: " << distance << std::endl;
+		std::cout << "  delta_angle: " << delta_angle << std::endl;
+		std::cout << "  trajectory: " << trajectory << std::endl;
+		std::cout << "  occupancy : " << (1 - percentage_known) << std::endl;
+		std::cout << "  entropy: " << entropy << std::endl;
+		std::cout << "  distance_weight: " << distance_weight << std::endl;
+		std::cout << "  angle_weight: " << angle_weight << std::endl;
+		std::cout << "  trajectory_weight: " << trajectory_weight << std::endl;
+		std::cout << "  uncertainty_weight : " << uncertainty_weight << std::endl;
+		std::cout << "  occupancy_weight: " << occupancy_weight << std::endl;
+		std::cout << "  entropy_weight: " << entropy_weight << std::endl;
+#endif
+
+		// double percentage_known = (double)vl_known / virtual_map.getVirtualLandmarkSize();
+		// double distance_weight = parameter.distance_weight0 - (parameter.distance_weight0 - parameter.distance_weight1) * percentage_known; // w = w0 - (w0 - w1) * exploration_percentage
+		// double utility = EMPlanner2D::calculateUncertainty(virtual_map) + distance * distance_weight + delta_angle * angle_weight;
+		// return utility;
+
+		double uncertainty = EMPlanner2D::calculateUncertainty(virtual_map);
+		// utility = uncertainty + distance + delta_angle + trajectory + (1 - percentage_known) + entropy;
+		double utility = uncertainty * uncertainty_weight + distance * distance_weight + delta_angle * angle_weight +
+										 trajectory * trajectory_weight + (1 - percentage_known) * occupancy_weight + entropy * entropy_weight;
+		return utility;
 	}
 
 	double EMPlanner2D::calculateUncertainty_OG_SHANNON(Node::shared_ptr node) const
@@ -1589,13 +1647,55 @@ namespace em_exploration
 		double angle_weight = parameter_.angle_weight;
 		bool obstacle;
 		double dist = 0;
+		double delta_angle = 0;
 
 		double initial_u;
 		double final_u;
 		double reward;
 
-		// 当前state的utility
-		initial_u = EMPlanner2D::calculateUtility(*temp_virtual_map, 0, parameter_);
+		Pose2 position = temp_slam->getMap().getCurrentVehicle().pose;
+		int i = int(round((position.y() - temp_slam->getMap().getParameter().getMinY()) / temp_virtual_map->getParameter().getResolution() - 0.5));
+		int j = int(round((position.x() - temp_slam->getMap().getParameter().getMinX()) / temp_virtual_map->getParameter().getResolution() - 0.5));
+		temp_virtual_map->updateProbability(*temp_slam, temp_sim->getSensorModel());
+		temp_virtual_map->updateInformation(temp_slam->getMap(), temp_sim->getSensorModel());
+
+		// 1.统计当前时刻位置的prob和trace的熵
+		Eigen::MatrixXd obs = temp_virtual_map->toArray();
+		Eigen::MatrixXd cov = temp_virtual_map->toCovTrace();
+		double prob[9];
+		double trace[9];
+		int p = 0;
+		for (int m = i - 1; m < i + 2; ++m)
+		{
+			for (int n = j - 1; n < j + 2; ++n)
+			{
+				prob[p] = obs(m, n);
+				trace[p] = cov(m, n);
+				++p;
+			}
+		}
+		double entropy = 0;
+		for (int m = 0; m < 9; ++m)
+		{
+			entropy = entropy - (prob[m] * log2(prob[m]) + (1 - prob[m]) * log2(1 - prob[m])) +							// Shannon entropy for prob
+								trace[m] * log2(pow(prob[m], 1 + 1 / trace[m]) + pow(1 - prob[m], 1 + 1 / trace[m])); // Renyi entropy for trace
+		}
+
+		// 2.计算当前state的utility
+		int len0 = temp_slam->getMap().getLandmarkSize();
+		temp_slam->adjacency_degree_get();
+		decltype(slam.features_matrix_) feature_matrixx0 = temp_slam->features_out();
+		int len1 = int(feature_matrixx0.size());
+		double feature0[len1];
+		for (int i = 0; i < len1; i++)
+		{
+			feature0[i] = feature_matrixx0(i);
+		}
+		double trajectory_uncertainty0 = *std::max_element(feature0 + len0, feature0 + len1);
+#ifndef DEBUG
+		std::cout << "initial_u-------------------" << std::endl;
+#endif
+		initial_u = EMPlanner2D::calculateUtility(*temp_virtual_map, 0, 0, parameter_, trajectory_uncertainty0, entropy);
 
 		// 对于 actions 中的每个action执行相应的仿真模拟
 		int actions_size = int(actions.size());
@@ -1606,7 +1706,8 @@ namespace em_exploration
 			double step_y = step_odom.y();
 			double step_theta = step_odom.theta();
 			std::pair<bool, SimpleControlModel::ControlState> move_result;
-			dist = dist + sqrt(pow(step_x, 2) + pow(step_y, 2) + angle_weight * pow(step_theta, 2));
+			dist = dist + sqrt(pow(step_x, 2) + pow(step_y, 2));
+			delta_angle = delta_angle + abs(step_theta);
 			//        std::cout<< "111" << std::endl;
 
 			//        move fuction
@@ -1631,13 +1732,54 @@ namespace em_exploration
 			temp_virtual_map->updateInformation(temp_slam->getMap(), temp_sim->getSensorModel());
 		}
 
+		// 4.统计下一时刻未知的prob和trace的熵
+		int len2 = temp_slam->getMap().getLandmarkSize();
+		temp_slam->adjacency_degree_get();
+		decltype(slam.features_matrix_) feature_matrixx1 = temp_slam->features_out();
+		int len3 = int(feature_matrixx1.size());
+		double feature1[len3];
+		for (int i = 0; i < len3; i++)
+		{
+			feature1[i] = feature_matrixx1(i);
+		}
+		double trajectory_uncertainty1 = *std::max_element(feature1 + len2, feature1 + len3);
+		Pose2 position1 = temp_slam->getMap().getCurrentVehicle().pose;
+		int i1 = int(round((position1.y() - temp_slam->getMap().getParameter().getMinY()) / temp_virtual_map->getParameter().getResolution() - 0.5));
+		int j1 = int(round((position1.x() - temp_slam->getMap().getParameter().getMinX()) / temp_virtual_map->getParameter().getResolution() - 0.5));
+		temp_virtual_map->updateProbability(*temp_slam, temp_sim->getSensorModel());
+		temp_virtual_map->updateInformation(temp_slam->getMap(), temp_sim->getSensorModel());
+		Eigen::MatrixXd obs1 = temp_virtual_map->toArray();
+		Eigen::MatrixXd cov1 = temp_virtual_map->toCovTrace();
+		double prob1[9];
+		double trace1[9];
+		int p1 = 0;
+		for (int m = i1 - 1; m < i1 + 2; m++)
+		{
+			for (int n = j1 - 1; n < j1 + 2; n++)
+			{
+				prob1[p1] = obs1(m, n);
+				trace1[p1] = cov1(m, n);
+				p1 = p1 + 1;
+			}
+		}
+		double entropy1 = 0;
+		for (int m = 0; m < 9; m++)
+		{
+			entropy1 = entropy1 - (prob1[m] * log2(prob1[m]) + (1 - prob1[m]) * log2(1 - prob1[m])) +
+								 trace1[m] * log2(pow(prob1[m], 1 + 1 / trace1[m]) + pow(1 - prob1[m], 1 + 1 / trace1[m]));
+		}
+#ifndef DEBUG
+		std::cout << "final_u-------------------" << std::endl;
+#endif
+		final_u = EMPlanner2D::calculateUtility(*temp_virtual_map, dist, delta_angle, parameter_, trajectory_uncertainty1, entropy1);
 
 		// 执行所有动作后，它计算最终的效用，并将奖励计算为初始效用和最终效用之间的差值
 		//    get reward of the current actions
-		final_u = EMPlanner2D::calculateUtility(*temp_virtual_map, dist, parameter_);
 		reward = initial_u - final_u;
+#ifndef DEBUG
+		std::cout << "final_u:" << final_u << ",  initial_u:" << initial_u << "  reward:" << reward << std::endl;
+#endif
 		//    std::cout<< "reward: " << reward << std::endl;
 		return reward;
 	}
-
 }

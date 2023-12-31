@@ -93,11 +93,13 @@ class ExplorationEnv(gym.Env):
     def _get_utility(self, action=None):
         if action is None:
             distance = 0.0
+            delta_angle = 0.0
         else:
             angle_weight = self._config.getfloat('Planner', 'angle_weight')
-            distance = math.sqrt(action.x ** 2 + action.y **
-                                 2 + angle_weight * action.theta ** 2)
-        return self._sim.calculate_utility(distance)
+            distance = math.sqrt(action.x ** 2 + action.y ** 2)
+            delta_angle = (action.theta * angle_weight)
+        trajectory_uncertainty = self.max_uncertainty_of_trajectory()
+        return self._sim.calculate_utility(distance, delta_angle, trajectory_uncertainty)
 
     def step(self, action):
         """在一个模拟环境中执行一个动作，并返回该动作的结果
