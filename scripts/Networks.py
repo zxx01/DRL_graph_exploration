@@ -1,5 +1,8 @@
 import os
+import math
+import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch_sparse import spspmm
 from torch_scatter import scatter_max, scatter_add
@@ -9,7 +12,7 @@ from torch_geometric.utils import (add_self_loops, sort_edge_index,
 from torch_geometric.utils.repeat import repeat
 
 
-class GCN(torch.nn.Module):
+class GCN0(torch.nn.Module):
     def __init__(self):
         super(GCN, self).__init__()
         self.conv1 = GCNConv(5, 1000, improved=True)
@@ -26,6 +29,121 @@ class GCN(torch.nn.Module):
         x = F.dropout(x, p=prob)
         x = self.fully_con1(x)
         return x
+
+
+class GCN(torch.nn.Module):
+    def __init__(self):
+        super(GCN, self).__init__()
+
+        self.fully_con = torch.nn.Linear(5, 512)
+        self.conv1 = GCNConv(512, 512, improved=True)
+        self.conv2 = GCNConv(512, 512, improved=True)
+
+        self.fully_con_s = torch.nn.Linear(512, 1)
+        self.noisy_layer = NoisyLinear(1024, 512)
+
+        self.net_val = nn.Sequential(  # value
+            self.noisy_layer, nn.ReLU(),
+            nn.Linear(512, 1),
+        )
+        self.hidden = None
+
+    def forward(self, data, prob, batch=None):
+        x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
+
+        x_initial = F.relu(self.fully_con(x))
+        x11 = self.conv1(x_initial, edge_index, edge_weight=edge_weight)
+        x11 = F.relu(x11)
+        x12 = self.conv2(x11, edge_index, edge_weight=edge_weight)
+        x12 = F.relu(x12)
+        x1 = torch.stack((x11, x12), 1)
+        a1 = F.softmax(self.fully_con_s(x1), dim=1).permute(0, 2, 1)
+        s_feature = torch.matmul(a1, x1).squeeze()
+
+        x = torch.cat((x_initial.squeeze(), s_feature), 1)
+        x = F.dropout(x, p=prob)
+        val = self.net_val(x).squeeze()
+
+        return val
+
+
+class NoisyLinear(torch.nn.Module):
+    """Noisy linear module for NoisyNet.
+
+    Attributes:
+        in_features (int): input size of linear module
+        out_features (int): output size of linear module
+        std_init (float): initial std value
+        weight_mu (nn.Parameter): mean value weight parameter
+        weight_sigma (nn.Parameter): std value weight parameter
+        bias_mu (nn.Parameter): mean value bias parameter
+        bias_sigma (nn.Parameter): std value bias parameter
+
+    """
+
+    def __init__(self, in_features: int, out_features: int, std_init: float = 0.5):
+        """Initialization."""
+        super(NoisyLinear, self).__init__()
+
+        self.in_features = in_features
+        self.out_features = out_features
+        self.std_init = std_init
+
+        self.weight_mu = torch.nn.Parameter(
+            torch.Tensor(out_features, in_features))
+        self.weight_sigma = torch.nn.Parameter(
+            torch.Tensor(out_features, in_features)
+        )
+        self.register_buffer(
+            "weight_epsilon", torch.Tensor(out_features, in_features)
+        )
+
+        self.bias_mu = torch.nn.Parameter(torch.Tensor(out_features))
+        self.bias_sigma = torch.nn.Parameter(torch.Tensor(out_features))
+        self.register_buffer("bias_epsilon", torch.Tensor(out_features))
+
+        self.reset_parameters()
+        self.reset_noise()
+
+    def reset_parameters(self):
+        """Reset trainable network parameters (factorized gaussian noise)."""
+        mu_range = 1 / math.sqrt(self.in_features)
+        self.weight_mu.data.uniform_(-mu_range, mu_range)
+        self.weight_sigma.data.fill_(
+            self.std_init / math.sqrt(self.in_features)
+        )
+        self.bias_mu.data.uniform_(-mu_range, mu_range)
+        self.bias_sigma.data.fill_(
+            self.std_init / math.sqrt(self.out_features)
+        )
+
+    def reset_noise(self):
+        """Make new noise."""
+        epsilon_in = self.scale_noise(self.in_features)
+        epsilon_out = self.scale_noise(self.out_features)
+
+        # outer product
+        self.weight_epsilon.copy_(epsilon_out.ger(epsilon_in))
+        self.bias_epsilon.copy_(epsilon_out)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward method implementation.
+
+        We don't use separate statements on train / eval mode.
+        It doesn't show remarkable difference of performance.
+        """
+        return F.linear(
+            x,
+            self.weight_mu + self.weight_sigma * self.weight_epsilon,
+            self.bias_mu + self.bias_sigma * self.bias_epsilon,
+        )
+
+    @staticmethod
+    def scale_noise(size: int) -> torch.Tensor:
+        """Set scale to make noise (factorized gaussian noise)."""
+        x = torch.FloatTensor(np.random.normal(loc=0.0, scale=0.2, size=size))
+
+        return x.sign().mul(x.abs().sqrt())
 
 
 class PolicyGCN(torch.nn.Module):
