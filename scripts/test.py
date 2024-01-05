@@ -1,5 +1,6 @@
 import time
 import gc
+import os
 import numpy as np
 import pandas as pd
 import torch
@@ -15,10 +16,12 @@ PLOT = True  # save testing date if False; only visualize the environment if Tru
 
 # setup the training model and method
 training_method = "DQN"  # DQN, A2C
-model_name = "GG-NN"  # GCN, GG-NN, g-U-Net
+model_name = "GCN"  # GCN, GG-NN, g-U-Net
 
+# data_attention_modified, data_only_attention, data_modified, data_raw, data_my_run
+DATA_DIRE = "../data_attention_modified/"
 case_path = training_method + "_" + model_name + "/"
-weights_path = "../data/torch_weights/" + case_path
+weights_path = DATA_DIRE + "torch_weights/" + case_path
 policy_name = training_method + "+" + model_name
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -125,8 +128,11 @@ def generator(lo_name):
         policy_time = gcn_tt1 - gcn_tt0
 
         if not PLOT:
-            data_all = data_all.append({"Computation time": policy_time, "Category": policy_name, "Map size": map_size},
-                                       ignore_index=True)
+            # data_all = data_all.append({"Computation time": policy_time, "Category": policy_name, "Map size": map_size},
+            #                            ignore_index=True)
+            new_data = pd.DataFrame(
+                [{"Computation time": policy_time, "Category": policy_name, "Map size": map_size}])
+            data_all = pd.concat([data_all, new_data], ignore_index=True)
 
         # move to next view point
         for act in actions:
@@ -141,19 +147,28 @@ def generator(lo_name):
             entro = map_entropy(obs)
             max_traj_error = env.max_uncertainty_of_trajectory()
             if not PLOT:
-                data_all = data_all.append(
-                    {"Step": step_t, "Category": policy_name, "Map entropy": entro, "Landmarks error": l_error,
-                     "Max localization uncertainty": max_traj_error}, ignore_index=True)
-            print('step: ', step_t, 'action: ', act,
-                  'done: ', done, 'explored: ', env.status())
+                new_row = pd.DataFrame([{"Step": step_t, "Category": policy_name, "Map entropy": entro, "Landmarks error": l_error,
+                                         "Max localization uncertainty": max_traj_error}])
+                data_all = pd.concat([data_all, new_row], ignore_index=True)
+
+                # data_all = data_all.append(
+                #     {"Step": step_t, "Category": policy_name, "Map entropy": entro, "Landmarks error": l_error,
+                #      "Max localization uncertainty": max_traj_error}, ignore_index=True)
+            print('test_iter: ', lo_name, ' step: ', step_t, ' action: ', act,
+                  ' done: ', done, ' explored: ', env.status())
 
             if done:
                 while step_t < plot_max_step:
                     step_t = step_t + 1
                     if not PLOT:
-                        data_all = data_all.append(
-                            {"Step": step_t, "Category": policy_name, "Map entropy": entro, "Landmarks error": l_error,
-                             "Max localization uncertainty": max_traj_error}, ignore_index=True)
+                        new_data = pd.DataFrame([{"Step": step_t, "Category": policy_name, "Map entropy": entro, "Landmarks error": l_error,
+                                                  "Max localization uncertainty": max_traj_error}])
+                        data_all = pd.concat(
+                            [data_all, new_data], ignore_index=True)
+
+                        # data_all = data_all.append(
+                        #     {"Step": step_t, "Category": policy_name, "Map entropy": entro, "Landmarks error": l_error,
+                        #      "Max localization uncertainty": max_traj_error}, ignore_index=True)
                 break
 
         if done:
@@ -212,5 +227,6 @@ if __name__ == "__main__":
         if not PLOT:
             data_output = pd.concat([data_output, exp_data])
     if not PLOT:
-        data_output.to_csv("../data/test_result/" + str(map_size) + "_" + training_method + "_" + model_name + ".csv",
+        os.makedirs(DATA_DIRE + "test_result/", exist_ok=True)
+        data_output.to_csv(DATA_DIRE + "test_result/" + str(map_size) + "_" + training_method + "_" + model_name + ".csv",
                            index=False)
