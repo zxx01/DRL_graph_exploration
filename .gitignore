@@ -30,5 +30,5 @@ cover/
 # ignore files
 .catkin_workspace
 
-data_raw/
+data*/
 .vscode
