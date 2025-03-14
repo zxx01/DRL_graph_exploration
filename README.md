@@ -15,19 +15,19 @@ This repository contains code for robot exploration under uncertainty that uses 
 - [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/en/latest/#)
   ```shell
   # torch-***+cu*** should be compatible with your pytorch version
-  pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.10.0+cu111.html
-  pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.10.0+cu111.html
-  pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.10.0+cu111.html
-  pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.10.0+cu111.html
-  pip install torch-geometric
+  pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.10.0+cu113.html
+  pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.10.0+cu113.html
+  pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.10.0+cu113.html
+  pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.10.0+cu113.html
+  pip install torch-geometric==2.0.4
   ```
-- [gtsam](http://www.borg.cc.gatech.edu/sites/edu.borg/files/downloads/gtsam.pdf) (Georgia Tech Smoothing and Mapping library)
+- [gtsam](http://www.borg.cc.gatech.edu/sites/edu.borg/files/downloads/gtsam.pdf) (Georgia Tech Smoothing and Mapping library). If there are other gtsams in the environment, it may cause version confusion.
   ```shell
   git clone --branch 4.0.3 https://github.com/borglab/gtsam.git
   cd gtsam
   mkdir build && cd build
   cmake ..
-  make check
+  make -j8
   sudo make install
   ```
 - [pybind11](https://github.com/pybind/pybind11) (pybind11 — Seamless operability between C++11 and Python)
@@ -36,7 +36,14 @@ This repository contains code for robot exploration under uncertainty that uses 
   cd pybind11
   mkdir build && cd build
   cmake ..
+  make -j8
   sudo make install
+  ```
+
+* others
+  ```shell
+  sudo apt install six
+  pip install gym matplotlib
   ```
 
 <br>
@@ -47,8 +54,9 @@ sudo ldconfig
 ```
 
 ## Compile
-You can use the following commands to download and compile the package.
-```shell
+You can use the following commands to download and compile the package. 
+
+```bash
 git clone https://github.com/RobustFieldAutonomyLab/DRL_graph_exploration.git
 cd DRL_graph_exploration
 mkdir build && cd build
