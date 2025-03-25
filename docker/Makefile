@@ -12,10 +12,10 @@ help:
 	@echo "   1. make clean              - remove all images"
 
 build:
-	@sudo docker build --no-cache --network=host --tag $(IMAGE_NAME) -f ./DRL2.Dockerfile .
+	@docker build --network=host --tag $(IMAGE_NAME) -f ./DRL2.Dockerfile .
 
 # pull:
 # 	@sudo docker pull $(IMAGE_NAME)
 
 clean:
-	@sudo docker rmi -f $(IMAGE_NAME)
+	@docker rmi -f $(IMAGE_NAME)

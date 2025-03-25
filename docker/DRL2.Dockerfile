@@ -93,9 +93,14 @@ RUN apt-get update && apt-get install -y \
     python3-rosinstall \
     python3-rosinstall-generator \
     python3-wstool \
-    build-essential \
-    && rosdep init \
-    && rosdep update
+    build-essential 
+
+
+RUN mkdir -p /etc/ros/rosdep/sources.list.d/ \
+    && curl -o /etc/ros/rosdep/sources.list.d/20-default.list https://mirrors.tuna.tsinghua.edu.cn/github-raw/ros/rosdistro/master/rosdep/sources.list.d/20-default.list \
+    && export ROSDISTRO_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/rosdistro/index-v4.yaml \
+    && rosdep update \
+    && echo 'export ROSDISTRO_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/rosdistro/index-v4.yaml' >> ~/.bashrc
 
 # 设置工作目录
 WORKDIR /workspace

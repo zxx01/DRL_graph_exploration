@@ -13,8 +13,57 @@ import Networks
 import envs.exploration_env as robot
 from PrioritizedReplayBuffer import PrioritizedReplayBuffer
 
+class ReplayBuffer:
+    """普通的经验回放缓冲区实现"""
+    def __init__(self, capacity):
+        """初始化普通经验回放缓冲区
+
+        Args:
+            capacity: 缓冲区容量
+        """
+        self.buffer = deque(maxlen=int(capacity))
+        self.capacity = int(capacity)
+    
+    def push(self, experience, *args):
+        """将经验存入缓冲区
+        
+        Args:
+            experience: 经验元组 (s_t, a_t, r_t, s_t1, done, fro_size1)
+            *args: 为了兼容PrioritizedReplayBuffer的接口，忽略额外参数
+        """
+        self.buffer.append(experience)
+    
+    def sample(self, batch_size):
+        """随机采样经验
+        
+        Args:
+            batch_size: 批量大小
+            
+        Returns:
+            经验批量，索引(None)，权重(全1)
+        """
+        indices = np.random.choice(len(self.buffer), batch_size, replace=False)
+        batch = [self.buffer[i] for i in indices]
+        # 对于普通缓冲区，权重全部为1
+        weights = np.ones(batch_size)
+        # 返回批量，索引和权重(用于与优先经验回放接口兼容)
+        return batch, None, weights
+    
+    def update_priorities(self, indices, priorities):
+        """更新优先级，普通缓冲区不需要更新优先级，仅为兼容接口
+        
+        Args:
+            indices: 索引列表
+            priorities: 优先级列表
+        """
+        pass  # 普通缓冲区不需要更新优先级
+    
+    def __len__(self):
+        """返回缓冲区当前大小"""
+        return len(self.buffer)
+
 class DeepQ(object):
-    def __init__(self, case_path, model_name):
+    def __init__(self, case_path, model_name, device, use_priority_buffer=True, buffer_size=1e5, batch_size=128):
         # define the local file path
         self.case_path = case_path
         self.weights_path = "../data/torch_weights/" + self.case_path
@@ -30,12 +79,13 @@ class DeepQ(object):
         data_all.to_csv(self.reward_data_path + "reward_data.csv", index=False)
 
         # setup parameters for RL
-        self.BATCH = 64
-        self.REPLAY_MEMORY = 1e5
+        self.BATCH = batch_size
+        self.REPLAY_MEMORY = buffer_size
         self.GAMMA = 0.99
         self.OBSERVE = 5e3
         self.EXPLORE = 1e6
         self.epoch = 1e4
+        self.device = device
         # self.TARGET_UPDATE = 15000 if model_name == "GCN" else 9000
         
         # 软更新参数
@@ -49,8 +99,16 @@ class DeepQ(object):
         # setup environment parameters
         self.map_size = 40
         
-        # 使用优先经验回放缓冲区
-        self.buffer = PrioritizedReplayBuffer(self.REPLAY_MEMORY)
+        # 设置缓冲区类型
+        self.use_priority_buffer = use_priority_buffer
+        
+        # 根据配置创建适当的经验回放缓冲区
+        if self.use_priority_buffer:
+            self.buffer = PrioritizedReplayBuffer(self.REPLAY_MEMORY)
+            print(f"使用优先经验回放缓冲区，大小: {self.REPLAY_MEMORY}")
+        else:
+            self.buffer = ReplayBuffer(self.REPLAY_MEMORY)
+            print(f"使用普通经验回放缓冲区，大小: {self.REPLAY_MEMORY}")
         
         # setup training
         self.step_t = 0
@@ -74,7 +132,6 @@ class DeepQ(object):
                 method = "epsilon"  # 默认使用epsilon-greedy
             
         env = robot.ExplorationEnv(self.map_size, 0, Test)
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         policy_net = model
         target_net = modelTarget
         target_net.eval()
@@ -84,7 +141,7 @@ class DeepQ(object):
         print(f"训练配置:")
         print(f"- 探索策略: {method}")
         print(f"- 使用Double DQN: {double_dqn}")
-        print(f"- 使用优先经验回放: 是")
+        print(f"- 使用优先经验回放: {self.use_priority_buffer}")
         print(f"- 使用软更新: 是 (TAU={self.TAU})")
         print(f"- 学习率: 1e-5")
         print(f"- Batch大小: {self.BATCH}")
@@ -119,7 +176,7 @@ class DeepQ(object):
                 if hasattr(policy_net, 'reset_noise'):
                     policy_net.reset_noise()
                 # 使用Noisy Networks选择动作，保持训练模式以启用噪声进行探索
-                readout_t = self.test(s_t, 0.0, device, policy_net, keep_train=True)  # 保持训练模式
+                readout_t = self.test(s_t, 0.0, self.device, policy_net, keep_train=True)  # 保持训练模式
                 readout_t = readout_t.cpu().detach().numpy()
                 action_index = np.argmax(readout_t[-fro_size:])
                 state = "noisy"
@@ -129,7 +186,7 @@ class DeepQ(object):
                     self.epsilon -= (self.INITIAL_EPSILON - self.FINAL_EPSILON) / self.EXPLORE
 
                 # 保持训练模式以启用dropout的贝叶斯不确定度
-                readout_t = self.test(s_t, self.epsilon, device, policy_net, keep_train=True)  
+                readout_t = self.test(s_t, self.epsilon, self.device, policy_net, keep_train=True)  
                 readout_t = readout_t.cpu().detach().numpy()
                 action_index = np.argmax(readout_t[-fro_size:])
                 state = "bayesian"
@@ -145,7 +202,7 @@ class DeepQ(object):
                     state = "random"
                 else:
                     # 贪婪选择动作
-                    readout_t = self.test(s_t, 0.0, device, policy_net)  # 使用默认的eval模式
+                    readout_t = self.test(s_t, 0.0, self.device, policy_net)  # 使用默认的eval模式
                     readout_t = readout_t.cpu().detach().numpy()
                     action_index = np.argmax(readout_t[-fro_size:])
                     state = "greedy"
@@ -174,11 +231,11 @@ class DeepQ(object):
                 if double_dqn:
                     # Double DQN: 策略网络选择动作，目标网络评估
                     # 策略网络在选择动作时应该使用确定性行为
-                    next_q_values_policy = self.test(s_t1, 0.0, device, policy_net)
+                    next_q_values_policy = self.test(s_t1, 0.0, self.device, policy_net)
                     next_q_values_policy = next_q_values_policy.cpu().numpy()
                     
                     # 目标网络评估
-                    next_q_values_target = self.test(s_t1, 0.0, device, target_net)
+                    next_q_values_target = self.test(s_t1, 0.0, self.device, target_net)
                     next_q_values_target = next_q_values_target.cpu().numpy()
                     
                     # 获取前景点的Q值
@@ -191,7 +248,7 @@ class DeepQ(object):
                     next_max_q = frontier_q_target[next_best_action]
                 else:
                     # 标准DQN:
-                    next_q_values_target = self.test(s_t1, 0.0, device, target_net)
+                    next_q_values_target = self.test(s_t1, 0.0, self.device, target_net)
                     next_q_values_target = next_q_values_target.cpu().numpy()
                     next_max_q = np.max(next_q_values_target[-fro_size1:])
                 
@@ -221,7 +278,7 @@ class DeepQ(object):
 
                 # 从优先经验回放缓冲区采样
                 minibatch, indices, weights = self.buffer.sample(self.BATCH)
-                weights = torch.FloatTensor(weights).to(device)
+                weights = torch.FloatTensor(weights).to(self.device)
 
                 # 获取批量变量
                 s_j_batch = [d[0] for d in minibatch] # type
@@ -238,15 +295,15 @@ class DeepQ(object):
                 if double_dqn:
                     # Double DQN: 策略网络选择动作，目标网络评估
                     # 策略网络在选择动作时应该使用确定性行为
-                    q_values_policy = self.test(s_j1_batch, 0.0, device, policy_net)
+                    q_values_policy = self.test(s_j1_batch, 0.0, self.device, policy_net)
                     q_values_policy = q_values_policy.cpu().detach().numpy()
                     
                     # 目标网络评估
-                    q_values_target = self.test(s_j1_batch, 0.0, device, target_net)
+                    q_values_target = self.test(s_j1_batch, 0.0, self.device, target_net)
                     q_values_target = q_values_target.cpu().detach().numpy()
                 else:
                     # 标准DQN: 只使用目标网络
-                    q_values_target = self.test(s_j1_batch, 0.0, device, target_net)
+                    q_values_target = self.test(s_j1_batch, 0.0, self.device, target_net)
                     q_values_target = q_values_target.cpu().detach().numpy()
                 
                 a_batch = np.array([])
@@ -292,27 +349,27 @@ class DeepQ(object):
 
                 # print("A_BATCH1", a_batch.shape)
                 # 使用重要性权重进行训练
-                self.train(s_j_batch, a_batch, y_batch, device, policy_net, optimizer, weights)
+                self.train(s_j_batch, a_batch, y_batch, self.device, policy_net, optimizer, weights)
                 # print("A_BATCH2", a_batch.shape)
                 
                 # 更新优先级
                 with torch.no_grad():
                     # 获取当前Q值时使用确定性模式，以便计算准确的TD误差
-                    current_q_values = self.test(s_j_batch, 0.0, device, policy_net)
+                    current_q_values = self.test(s_j_batch, 0.0, self.device, policy_net)
                     current_q_values = current_q_values.cpu().numpy()
                     
                     # print("CURRENT_Q", current_q_values.shape)
                     
                     if double_dqn:
                         # 策略网络在TD目标计算时使用确定性模式
-                        q_values_policy = self.test(s_j1_batch, 0.0, device, policy_net)
+                        q_values_policy = self.test(s_j1_batch, 0.0, self.device, policy_net)
                         q_values_policy = q_values_policy.cpu().detach().numpy()
                         
                         # 目标网络评估
-                        q_values_target = self.test(s_j1_batch, 0.0, device, target_net)
+                        q_values_target = self.test(s_j1_batch, 0.0, self.device, target_net)
                         q_values_target = q_values_target.cpu().detach().numpy()
                     else:
-                        next_q_values = self.test(s_j1_batch, 0.0, device, target_net)
+                        next_q_values = self.test(s_j1_batch, 0.0, self.device, target_net)
                         next_q_values = next_q_values.cpu().numpy()
                     
                     td_errors = []
@@ -475,7 +532,7 @@ class DeepQ(object):
 
 
 class A2C(object):
-    def __init__(self, case_path):
+    def __init__(self, case_path, device):
         # define the local file path
         self.case_path = case_path
         self.weights_path = "../data/torch_weights/" + self.case_path
@@ -498,7 +555,7 @@ class A2C(object):
         self.ent_coef = 0.01
         self.vf_coef = 0.25
         self.max_grad_norm = 0.5
-
+        self.device = device
         # setup memory
         self.buffer = deque()
         # setup environment parameters
@@ -514,7 +571,6 @@ class A2C(object):
         temp_i = 0
         Test = test
         env = robot.ExplorationEnv(self.map_size, 0, Test)
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         policy_net = actor
         value_net = critic
         params = list(policy_net.parameters()) + list(value_net.parameters())
@@ -529,7 +585,7 @@ class A2C(object):
             adjacency, featrues, globals_features, fro_size = env.graph_matrix()
             node_size = adjacency.shape[0]
             key_size = node_size - fro_size
-            s_t, b_t = self.data_process([adjacency, featrues], device)
+            s_t, b_t = self.data_process([adjacency, featrues], self.device)
             mask = np.zeros([node_size])
             mask[-fro_size:] = 1
 
@@ -538,9 +594,9 @@ class A2C(object):
             rewards = env.rewards_all_goals(all_actions)
 
             # choose an action
-            readout_t = self.test(s_t, b_t, mask, device,
+            readout_t = self.test(s_t, b_t, mask, self.device,
                                   policy_net).view(-1).cpu().detach().numpy()
-            val = self.test(s_t, b_t, mask, device, value_net).item()
+            val = self.test(s_t, b_t, mask, self.device, value_net).item()
 
             action_index = np.random.choice(fro_size, 1, p=readout_t)[0]
             action_index = key_size + action_index
@@ -563,11 +619,11 @@ class A2C(object):
 
             # get next state
             adjacency, featrues, globals_features, fro_size1 = env.graph_matrix()
-            s_t1, b_t1 = self.data_process([adjacency, featrues], device)
+            s_t1, b_t1 = self.data_process([adjacency, featrues], self.device)
             mask = np.zeros([adjacency.shape[0]])
             mask[-fro_size1:] = 1
 
-            last_value = self.test(s_t1, b_t1, mask, device, value_net).item()
+            last_value = self.test(s_t1, b_t1, mask, self.device, value_net).item()
 
             # save to buffer
             self.buffer.append(
@@ -612,7 +668,7 @@ class A2C(object):
 
                 # perform gradient step
                 self.train(s_j_batch, a_batch, mask_batch, discount_rewards, y_adv_batch,
-                           device, policy_net, value_net, optimizer)
+                           self.device, policy_net, value_net, optimizer)
                 temp_loss_data.append([self.step_t, self.temp_loss])
                 self.buffer.clear()
 
@@ -729,12 +785,12 @@ class A2C(object):
         return pred
 
 
-if __name__ == "__main__":
-    case_path = "test_case"
-    training = A2C(case_path)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    modela = Networks.PolicyGCN()
-    modelc = Networks.ValueGCN()
-    modela.to(device)
-    modelc.to(device)
-    training.running(modela, modelc)
+# if __name__ == "__main__":
+#     case_path = "test_case"
+#     training = A2C(case_path)
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#     modela = Networks.PolicyGCN()
+#     modelc = Networks.ValueGCN()
+#     modela.to(device)
+#     modelc.to(device)
+#     training.running(modela, modelc)
