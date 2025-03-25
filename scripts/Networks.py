@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn.functional as F
+import math
 from torch_sparse import spspmm
 from torch_scatter import scatter_max, scatter_add
 from torch_geometric.nn import GCNConv, TopKPooling, GatedGraphConv, global_max_pool, global_mean_pool
@@ -447,3 +448,146 @@ class ValueGraphUNet(torch.nn.Module):
         return '{}({}, {}, {}, depth={}, pool_ratios={})'.format(
             self.__class__.__name__, self.in_channels, self.hidden_channels,
             self.out_channels, self.depth, self.pool_ratios)
+
+
+class DuelingGCN(torch.nn.Module):
+    def __init__(self):
+        super(DuelingGCN, self).__init__()
+        # 共享特征提取层
+        self.conv1 = GCNConv(5, 1000, improved=True)
+        self.conv2 = GCNConv(1000, 1000, improved=True)
+        
+        # 价值流
+        self.value_conv = GCNConv(1000, 512, improved=True)
+        self.value_fc = torch.nn.Linear(512, 1)
+        
+        # 优势流
+        self.advantage_conv = GCNConv(1000, 512, improved=True)
+        self.advantage_fc = torch.nn.Linear(512, 1)
+        
+    def forward(self, data, prob, batch=None):
+        x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
+        
+        # 共享特征提取
+        x = self.conv1(x, edge_index, edge_weight=edge_weight)
+        x = F.relu(x)
+        x = self.conv2(x, edge_index, edge_weight=edge_weight)
+        x = F.relu(x)
+        x = F.dropout(x, p=prob)
+        
+        # 价值流
+        value = self.value_conv(x, edge_index, edge_weight=edge_weight)
+        value = F.relu(value)
+        value = self.value_fc(value)
+        
+        # 优势流
+        advantage = self.advantage_conv(x, edge_index, edge_weight=edge_weight)
+        advantage = F.relu(advantage)
+        advantage = self.advantage_fc(advantage)
+        
+        # 组合价值流和优势流
+        q_values = value + (advantage - advantage.mean(dim=1, keepdim=True))
+        
+        return q_values
+
+
+class NoisyLinear(torch.nn.Module):
+    def __init__(self, in_features, out_features, bias=True, std_init=0.1):
+        super(NoisyLinear, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.std_init = std_init
+        self.bias = bias
+        
+        # 创建权重和偏置
+        self.weight_mu = torch.nn.Parameter(torch.FloatTensor(out_features, in_features))
+        self.weight_sigma = torch.nn.Parameter(torch.FloatTensor(out_features, in_features))
+        self.register_buffer('weight_epsilon', torch.FloatTensor(out_features, in_features))
+        
+        if bias:
+            self.bias_mu = torch.nn.Parameter(torch.FloatTensor(out_features))
+            self.bias_sigma = torch.nn.Parameter(torch.FloatTensor(out_features))
+            self.register_buffer('bias_epsilon', torch.FloatTensor(out_features))
+        else:
+            self.register_parameter('bias_mu', None)
+            self.register_parameter('bias_sigma', None)
+            self.register_buffer('bias_epsilon', None)
+        
+        self.reset_parameters()
+        self.reset_noise()
+    
+    def reset_parameters(self):
+        mu_range = 1 / math.sqrt(self.in_features)
+        self.weight_mu.data.uniform_(-mu_range, mu_range)
+        self.weight_sigma.data.fill_(self.std_init / math.sqrt(self.in_features))
+        
+        if self.bias:
+            self.bias_mu.data.uniform_(-mu_range, mu_range)
+            self.bias_sigma.data.fill_(self.std_init / math.sqrt(self.out_features))
+    
+    def reset_noise(self):
+        epsilon_in = self._scale_noise(self.in_features)
+        epsilon_out = self._scale_noise(self.out_features)
+        self.weight_epsilon.copy_(epsilon_out.ger(epsilon_in))
+        
+        if self.bias:
+            self.bias_epsilon.copy_(self._scale_noise(self.out_features))
+    
+    def _scale_noise(self, size):
+        x = torch.randn(size)
+        return x.sign().mul(x.abs().sqrt())
+    
+    def forward(self, x):
+        if self.training:
+            weight = self.weight_mu + self.weight_sigma * self.weight_epsilon
+            bias = self.bias_mu + self.bias_sigma * self.bias_epsilon if self.bias else None
+        else:
+            weight = self.weight_mu
+            bias = self.bias_mu if self.bias else None
+        return F.linear(x, weight, bias)
+
+
+class NoisyGCN(torch.nn.Module):
+    def __init__(self):
+        super(NoisyGCN, self).__init__()
+        # 共享特征提取层
+        self.conv1 = GCNConv(5, 1000, improved=True)
+        self.conv2 = GCNConv(1000, 1000, improved=True)
+        
+        # 价值流
+        self.value_conv = GCNConv(1000, 512, improved=True)
+        self.value_fc = NoisyLinear(512, 1)
+        
+        # 优势流
+        self.advantage_conv = GCNConv(1000, 512, improved=True)
+        self.advantage_fc = NoisyLinear(512, 1)
+        
+    def forward(self, data, prob, batch=None):
+        x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
+        
+        # 共享特征提取
+        x = self.conv1(x, edge_index, edge_weight=edge_weight)
+        x = F.relu(x)
+        x = self.conv2(x, edge_index, edge_weight=edge_weight)
+        x = F.relu(x)
+        x = F.dropout(x, p=prob)
+        
+        # 价值流
+        value = self.value_conv(x, edge_index, edge_weight=edge_weight)
+        value = F.relu(value)
+        value = self.value_fc(value)
+        
+        # 优势流
+        advantage = self.advantage_conv(x, edge_index, edge_weight=edge_weight)
+        advantage = F.relu(advantage)
+        advantage = self.advantage_fc(advantage)
+        
+        # 组合价值流和优势流
+        q_values = value + (advantage - advantage.mean(dim=1, keepdim=True))
+        
+        return q_values
+    
+    def reset_noise(self):
+        """重置所有NoisyLinear层的噪声"""
+        self.value_fc.reset_noise()
+        self.advantage_fc.reset_noise()

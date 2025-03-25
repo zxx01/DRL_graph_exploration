@@ -248,21 +248,22 @@ class ExplorationEnv(gym.Env):
             _type_: _description_
         """
         # 1.初始化准备数据
-        self.frontier()
-        trace_map = self._sim._virtual_map.to_cov_trace()
-        key_size = self._sim._slam.key_size()
-        land_size = self.get_landmark_size()
-        fro_size = len(self._frontier)
+        self.frontier()  # 提取前沿点
+        trace_map = self._sim._virtual_map.to_cov_trace()  # 获取协方差迹矩阵
+        key_size = self._sim._slam.key_size()  # 获取SLAM节点数量
+        land_size = self.get_landmark_size()  # 获取路标数量
+        fro_size = len(self._frontier)  # 获取前沿点数量
 
-        self._sim._slam.adjacency_degree_get()
-        adjacency = np.array(self._sim._slam.adjacency_out())
-        features = np.array(self._sim._slam.features_out())
-        adjacency = np.pad(
-            adjacency, ((0, fro_size), (0, fro_size)), 'constant')
+        # 获取SLAM图的邻接矩阵和特征
+        self._sim._slam.adjacency_degree_get()  # 生成SLAM节点的邻接矩阵
+        adjacency = np.array(self._sim._slam.adjacency_out())  # 转换为NumPy数组
+        features = np.array(self._sim._slam.features_out())  # 获取SLAM节点的特征
+
+        # 扩展矩阵以包含前沿点
+        adjacency = np.pad(adjacency, ((0, fro_size), (0, fro_size)), 'constant')
         features = np.pad(features, ((0, fro_size), (0, 0)), 'constant')
 
-        robot_location = [self._sim.vehicle_position.x,
-                          self._sim.vehicle_position.y]
+        robot_location = [self._sim.vehicle_position.x, self._sim.vehicle_position.y]
 
         # 2.构建邻接矩阵
         # add frontiers to adjacency matrix
@@ -350,7 +351,7 @@ class ExplorationEnv(gym.Env):
             return False
 
     def frontier(self):
-        """在一个环境中识别前沿点
+        """在一个环境中识别前沿点，但是只保留与机器人当前位置或已知地标有明确关联（距离最近）的frontier
         """
         # 1.获取当前位置
         vehicle_location = [self._sim.vehicle_position.x,
@@ -377,41 +378,39 @@ class ExplorationEnv(gym.Env):
             cur_i = free_index_i[ptr]
             cur_j = free_index_j[ptr]
             count = 0
-            cur_i_min = free_index_i[ptr] - \
-                1 if free_index_i[ptr] - 1 >= 0 else 0
-            cur_i_max = free_index_i[ptr] + 1 if free_index_i[ptr] + \
-                1 < self.leng_i_map else self.leng_i_map - 1
-            cur_j_min = free_index_j[ptr] - \
-                1 if free_index_j[ptr] - 1 >= 0 else 0
-            cur_j_max = free_index_j[ptr] + 1 if free_index_j[ptr] + \
-                1 < self.leng_j_map else self.leng_j_map - 1
+            
+            # 获取当前栅格的8邻域范围
+            cur_i_min = free_index_i[ptr] - 1 if free_index_i[ptr] - 1 >= 0 else 0
+            cur_i_max = free_index_i[ptr] + 1 if free_index_i[ptr] + 1 < self.leng_i_map else self.leng_i_map - 1
+            cur_j_min = free_index_j[ptr] - 1 if free_index_j[ptr] - 1 >= 0 else 0
+            cur_j_max = free_index_j[ptr] + 1 if free_index_j[ptr] + 1 < self.leng_j_map else self.leng_j_map - 1
 
+            # 检查8邻域中未知栅格(概率≈0.5)的数量
             for ne_i in range(cur_i_min, cur_i_max + 1):
                 for ne_j in range(cur_j_min, cur_j_max + 1):
-                    if 0.49 < self._obs[ne_i][ne_j] < 0.51:
+                    if 0.49 < self._obs[ne_i][ne_j] < 0.51:  # 未知区域的概率约为0.5
                         count += 1
 
-            if count >= 2:
-                ind2co = self.index2coor(cur_i, cur_j)
+            # 如果有足够多的未知邻居，则认为是前沿点
+            if count >= 2:  # 至少有2个未知邻居
+                ind2co = self.index2coor(cur_i, cur_j)  # 将栅格索引转换为坐标
+                
+                # 确保前沿点在地图有效范围内
                 if self._sim._map_params.min_x + self.ext <= ind2co[0] <= self._sim._map_params.max_x - self.ext \
-                    and self._sim._map_params.min_y + self.ext <= ind2co[
-                        1] <= self._sim._map_params.max_y - self.ext:
+                    and self._sim._map_params.min_y + self.ext <= ind2co[1] <= self._sim._map_params.max_y - self.ext:
                     all_frontiers.append(ind2co)
 
         # 4.寻找距离当前位置最近的frontier
-        cur_fro = all_frontiers[self.nearest_frontier(
-            vehicle_location, all_frontiers)]
-        self._frontier.append(cur_fro)  # frontier 的 id
-        self._frontier_index.append([0])  # 连接 frontier 的 node 的 id
+        cur_fro = all_frontiers[self.nearest_frontier(vehicle_location, all_frontiers)]
+        self._frontier.append(cur_fro)  # 添加到前沿点列表
+        self._frontier_index.append([0])  # 连接前沿点的节点ID，0表示当前位置
 
         # 5.寻找距离每个landmark最近的frontier
         if not self._one_nearest_frontier:
             for ip, p in enumerate(all_landmarks):
-                cur_fro = all_frontiers[self.nearest_frontier(
-                    p, all_frontiers)]
+                cur_fro = all_frontiers[self.nearest_frontier(p, all_frontiers)]
                 try:
-                    self._frontier_index[self._frontier.index(
-                        cur_fro)].append(ip + 1)
+                    self._frontier_index[self._frontier.index(cur_fro)].append(ip + 1)
                 except ValueError:
                     self._frontier.append(cur_fro)
                     self._frontier_index.append([ip + 1])

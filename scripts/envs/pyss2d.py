@@ -95,6 +95,7 @@ class SS2D(object):
         # y0 = ini_lo[lo][1]
         # theta0 = math.radians(self._config.getfloat('Simulator', 'theta0'))
 
+        # 初始化模拟器
         lo = int(self._config.getfloat('Simulator', 'lo'))
         np.random.seed(lo+1)
         x0 = float(np.random.randint(self._map_params.max_x) -
@@ -120,6 +121,7 @@ class SS2D(object):
         self._slam = ss2d.SLAM2D(self._map_params)
         self._virtual_map = ss2d.VirtualMap(self._virtual_map_params, seed)
 
+        # 随机生成landmarks
         if self._config.has_section('Landmarks') and self._config.has_option('Landmarks', 'x') and \
                 self._config.has_option('Landmarks', 'y'):
             x = eval(self._config.get('Landmarks', 'x'))
@@ -148,7 +150,11 @@ class SS2D(object):
         self._da_ground_truth = {}
 
         self._slam.add_prior(initial_state)
+        
+        # 获取landmarks的观测并添加到slam中
         self.measure()
+        
+        # 优化
         self.optimize()
         self.step += 1
 
@@ -168,10 +174,12 @@ class SS2D(object):
         self._slam.optimize(update_covariance=True)
 
     def update_virtual_map(self, update_probability=False, update_information=True):
+        # 更新virtual map的概率
         if update_probability:
             self._virtual_map.update_probability(
                 self._slam, self._sim.sensor_model)
 
+        # 更新virtual map的信息
         if update_information:
             self._virtual_map.update_information(
                 self._slam.map, self._sim.sensor_model)

@@ -15,7 +15,7 @@ PLOT = True  # save testing date if False; only visualize the environment if Tru
 
 # setup the training model and method
 training_method = "DQN"  # DQN, A2C
-model_name = "GG-NN"  # GCN, GG-NN, g-U-Net
+model_name = "GCN"  # GCN, GG-NN, g-U-Net
 
 case_path = training_method + "_" + model_name + "/"
 weights_path = "../data/torch_weights/" + case_path

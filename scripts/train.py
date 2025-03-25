@@ -10,7 +10,11 @@ from policy import DeepQ, A2C
 
 # setup the training model and method
 training_method = "DQN"  # DQN, A2C
-model_name = "GCN"  # GCN, GG-NN, g-U-Net
+model_name = "NoisyGCN"  # GCN, GG-NN, g-U-Net, DuelingGCN, NoisyGCN
+# using double DQN
+use_double_dqn = True
+# 指定探索策略 (可选: "None", "noisy", "epsilon", "bayesian")
+exploration_method = "noisy"  # None表示自动选择
 
 # setup local file paths
 case_path = training_method + "_" + model_name + "/"
@@ -26,66 +30,85 @@ writer = SummaryWriter(log_dir=log_path)
 
 # choose training method
 if training_method == "DQN":
-    # create a training object
-    dgrl_training = DeepQ(case_path, model_name)
-    # define training parameters
-    epoch_nums = dgrl_training.EXPLORE / dgrl_training.epoch
-    # dump pickle file
+    # create training object
+    training = DeepQ(case_path, model_name)
+    # 保存训练对象
     full_file_name = object_path + 'saved_training.pkl'
     with open(full_file_name, 'wb') as f:
-        pickle.dump(dgrl_training, f)
-    # load Q training model
+        pickle.dump(training, f, pickle.HIGHEST_PROTOCOL)
+    # save the model
     policy_model_name = object_path + 'Model_Policy.pt'
     target_model_name = object_path + 'Model_Target.pt'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     if model_name == "GCN":
-        model = Networks.GCN()
-        modelt = Networks.GCN()
+        policy_model = Networks.GCN()
+        target_model = Networks.GCN()
+    elif model_name == "DuelingGCN":
+        policy_model = Networks.DuelingGCN()
+        target_model = Networks.DuelingGCN()
+    elif model_name == "NoisyGCN":
+        policy_model = Networks.NoisyGCN()
+        target_model = Networks.NoisyGCN()
     elif model_name == "g-U-Net":
-        model = Networks.GraphUNet(
+        policy_model = Networks.GraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
-        modelt = Networks.GraphUNet(
+        target_model = Networks.GraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
-        model = Networks.GGNN()
-        modelt = Networks.GGNN()
-    model.to(device)
-    modelt.to(device)
-    torch.save(model.state_dict(), policy_model_name)
-    torch.save(modelt.state_dict(), target_model_name)
+        policy_model = Networks.GGNN()
+        target_model = Networks.GGNN()
+    else:
+        raise ValueError(f"不支持的模型类型: {model_name}")
+    policy_model.to(device)
+    target_model.to(device)
+    torch.save(policy_model.state_dict(), policy_model_name)
+    torch.save(target_model.state_dict(), target_model_name)
 
 elif training_method == "A2C":
-    # create a training object
-    dgrl_training = A2C(case_path)
-    # define training parameters
-    epoch_nums = dgrl_training.EXPLORE/dgrl_training.epoch
-    # dump pickle file
+    # create training object
+    training = A2C(case_path)
+    # 保存训练对象
     full_file_name = object_path + 'saved_training.pkl'
     with open(full_file_name, 'wb') as f:
-        pickle.dump(dgrl_training, f)
-    # load training model
+        pickle.dump(training, f, pickle.HIGHEST_PROTOCOL)
+    # save the model
     policy_model_name = object_path + 'Model_Policy.pt'
     value_model_name = object_path + 'Model_Value.pt'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     if model_name == "GCN":
-        modela = Networks.PolicyGCN()
-        modelc = Networks.ValueGCN()
+        policy_model = Networks.PolicyGCN()
+        value_model = Networks.ValueGCN()
     elif model_name == "g-U-Net":
-        modela = Networks.PolicyGraphUNet(
+        policy_model = Networks.PolicyGraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
-        modelc = Networks.ValueGraphUNet(
+        value_model = Networks.ValueGraphUNet(
             in_channels=5, hidden_channels=1000, out_channels=1000, depth=3)
     elif model_name == "GG-NN":
-        modela = Networks.PolicyGGNN()
-        modelc = Networks.ValueGGNN()
-    modela.to(device)
-    modelc.to(device)
-    torch.save(modela.state_dict(), policy_model_name)
-    torch.save(modelc.state_dict(), value_model_name)
+        policy_model = Networks.PolicyGGNN()
+        value_model = Networks.ValueGGNN()
+    else:
+        raise ValueError(f"不支持的模型类型: {model_name}")
+    policy_model.to(device)
+    value_model.to(device)
+    torch.save(policy_model.state_dict(), policy_model_name)
+    torch.save(value_model.state_dict(), value_model_name)
+
+# print(f"开始训练 {training_method} 使用 {model_name} {'(Double DQN)' if use_double_dqn else ''} 探索策略: {exploration_method or '自动选择'}")
+# training.running(policy_model, target_model, test=False, double_dqn=use_double_dqn, exploration_method=exploration_method)
+
+# 根据training对象设置epoch数量
+if training_method == "DQN":
+    epoch_nums = training.EXPLORE / training.epoch
+elif training_method == "A2C":
+    epoch_nums = training.EXPLORE / training.epoch
 
 time_total = 0
 for i in range(int(epoch_nums)):
-    cmd = "python3 run_training.py " + training_method + " " + model_name
+    cmd = "python3 run_training.py " + training_method + " " + model_name + " " + str(use_double_dqn).lower()
+    if exploration_method:
+        cmd += " " + exploration_method
 
     time_start = time.time()
     subprocess.call(cmd, shell=True)

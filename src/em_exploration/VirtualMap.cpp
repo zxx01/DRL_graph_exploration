@@ -251,18 +251,26 @@ namespace em_exploration
   bool VirtualMap::predictVirtualLandmark(const VehicleBeliefState &state, VirtualLandmark &virtual_landmark,
                                           const BearingRangeSensorModel &sensor_model) const
   {
+    // 模拟传感器测量
     BearingRangeSensorModel::Measurement m = sensor_model.measure(state.pose, virtual_landmark.point, true, false);
 
+    // 检查测量是否有效
     if (!sensor_model.check(m))
       return false;
 
+    // 计算测量噪声协方差
     Eigen::Matrix2d R = m.getSigmas().asDiagonal();
     R = R * R;
+
+    // 获取测量对位姿和地标的雅可比矩阵
     Eigen::Matrix<double, 2, 3> Hx = m.getHx();
     Eigen::Matrix2d Hl = m.getHl();
     Hl = (Hl.transpose() * Hl).inverse() * Hl.transpose();
 
+    // 计算测量引入的地标不确定性（协方差）
     Eigen::Matrix2d cov = Hl * (R + Hx * state.information.llt().solve(Hx.transpose())) * Hl.transpose();
+
+    // 转换为信息矩阵（协方差的逆）
     virtual_landmark.information = inverse(cov);
     return true;
   }
@@ -303,6 +311,7 @@ namespace em_exploration
    */
   void VirtualMap::updateInformation(const Map &map, const BearingRangeSensorModel &sensor_model)
   {
+    // 将所有虚拟地标的信息矩阵重置为初始值
     for (auto &it : virtual_landmarks_)
     {
       it.updated = false;
@@ -311,9 +320,7 @@ namespace em_exploration
                            .finished();
     }
 
-    //    for (VirtualLandmark &l : virtual_landmarks_) {
-    //      updateInformation(l, map, sensor_model);
-    //    }
+    // 对地图中的每个核心位姿，更新相关虚拟地标的信息
     for (auto it = map.cbeginTrajectory(); it != map.cendTrajectory(); ++it)
     {
       if (it->core_vehicle)
@@ -344,23 +351,25 @@ namespace em_exploration
 
   void VirtualMap::updateInformation(const VehicleBeliefState &state, const BearingRangeSensorModel &sensor_model)
   {
-    assert(virtual_landmarks_kdtree_);
-
+    // 检查位姿的信息矩阵是否有效
     if (state.information.determinant() < 1e-10)
       return;
 
-    std::vector<int> neighbors = searchVirtualLandmarkNeighbors(state, sensor_model.getParameter().getMaxRange(), -1);
+    // 在传感器范围内查找虚拟地标
+    std::vector<int> neighbors = searchVirtualLandmarkNeighbors(
+        state, sensor_model.getParameter().getMaxRange(), -1);
 
+    // 对每个邻居虚拟地标进行更新
     for (int n : neighbors)
     {
-      //    if (virtual_landmarks_[n].probability < 0.49)
-      //      continue;
-
       VirtualLandmark temp;
       temp.point = virtual_landmarks_[n].point;
+
+      // 预测虚拟地标
       if (!predictVirtualLandmark(state, temp, sensor_model))
         continue;
 
+      // 使用协方差交叉更新信息矩阵
       if (virtual_landmarks_[n].updated)
         virtual_landmarks_[n].information =
             covarianceIntersection2D(virtual_landmarks_[n].information, temp.information);
@@ -374,51 +383,50 @@ namespace em_exploration
 
   void VirtualMap::initialize()
   {
+    // 计算栅格数量
     cols_ = static_cast<int>(floor((parameter_.getMaxX() - parameter_.getMinX()) / parameter_.getResolution()));
     rows_ = static_cast<int>(floor((parameter_.getMaxY() - parameter_.getMinY()) / parameter_.getResolution()));
 
-    //  int ext = (int)floor(5.0 / parameter_.getResolution());
-    int ext = 0.0;
-    int extg = 20;
+    int ext = 0.0; // 边界扩展，这里设为0
+    int extg = 20; // 用于计算探索完成度的边界
     std::vector<Point2> points;
+
+    // 为每个栅格创建一个虚拟地标
     for (int row = ext; row < rows_ - ext; ++row)
     {
       for (int col = ext; col < cols_ - ext; ++col)
       {
+        // 计算栅格中心点的坐标
         double x = (col + 0.5) * parameter_.getResolution() + parameter_.getMinX();
         double y = (row + 0.5) * parameter_.getResolution() + parameter_.getMinY();
         Point2 point(x, y);
+
+        // 设置初始信息矩阵
         Eigen::Matrix2d information;
         information << 1.0 / pow(parameter_.getSigma0(), 2), 0,
             0, 1.0 / pow(parameter_.getSigma0(), 2);
-        virtual_landmarks_.emplace_back(0.5, point, information);
 
+        // 创建虚拟地标并添加到列表中
+        virtual_landmarks_.emplace_back(0.5, point, information);
         points.push_back(point);
       }
     }
-    count_explored_ = (rows_ - extg * 2 / static_cast<int>(parameter_.getResolution())) * (cols_ - extg * 2 / static_cast<int>(parameter_.getResolution()));
 
-    //  count_explored_ = points.size();
+    // 计算需要探索的虚拟地标数量（排除边界）
+    count_explored_ = (rows_ - extg * 2 / static_cast<int>(parameter_.getResolution())) *
+                      (cols_ - extg * 2 / static_cast<int>(parameter_.getResolution()));
 
-    //  for (int row = 0; row < rows_; ++row) {
-    //    for (int col = 0; col < cols_; ++col) {
-    //      if (row >= ext && row < rows_ - ext && col >= ext && col < cols_ - ext)
-    //          continue;
-    //      double x = (col + 0.5) * parameter_.getResolution() + parameter_.getMinX();
-    //      double y = (row + 0.5) * parameter_.getResolution() + parameter_.getMinY();
-    //      Point2 point(x, y);
-    //      Eigen::Matrix2d information;
-    //      information << 1.0 / pow(parameter_.getSigma0(), 2), 0,
-    //          0, 1.0 / pow(parameter_.getSigma0(), 2);
-    //      virtual_landmarks_.emplace_back(0.5, point, information);
-    //
-    //      points.push_back(point);
-    //    }
-    //  }
-
+    // 构建KD树用于快速查询
     virtual_landmarks_kdtree_->build(points);
   }
 
+  /**
+   * @brief 计算两个信息矩阵的协方差交叉
+   *
+   * @param m1 信息矩阵1
+   * @param m2 信息矩阵2
+   * @return Eigen::Matrix2d 协方差交叉结果
+   */
   Eigen::Matrix2d VirtualMap::covarianceIntersection2D(const Eigen::Matrix2d &m1, const Eigen::Matrix2d &m2) const
   {
     double a = m1.determinant();
